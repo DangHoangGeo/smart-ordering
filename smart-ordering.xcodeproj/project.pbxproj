@@ -1,0 +1,555 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		364ECEBD2DE4340D001A2ACA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 364ECEA72DE4340B001A2ACA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 364ECEAE2DE4340B001A2ACA;
+			remoteInfo = "smart-ordering";
+		};
+		364ECEC72DE4340D001A2ACA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 364ECEA72DE4340B001A2ACA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 364ECEAE2DE4340B001A2ACA;
+			remoteInfo = "smart-ordering";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		364ECEAF2DE4340B001A2ACA /* smart-ordering.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "smart-ordering.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		364ECEBC2DE4340D001A2ACA /* smart-orderingTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "smart-orderingTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		364ECEC62DE4340D001A2ACA /* smart-orderingUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "smart-orderingUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		364ECEB12DE4340B001A2ACA /* smart-ordering */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "smart-ordering";
+			sourceTree = "<group>";
+		};
+		364ECEBF2DE4340D001A2ACA /* smart-orderingTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "smart-orderingTests";
+			sourceTree = "<group>";
+		};
+		364ECEC92DE4340D001A2ACA /* smart-orderingUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "smart-orderingUITests";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		364ECEAC2DE4340B001A2ACA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		364ECEB92DE4340D001A2ACA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		364ECEC32DE4340D001A2ACA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		364ECEA62DE4340B001A2ACA = {
+			isa = PBXGroup;
+			children = (
+				364ECEB12DE4340B001A2ACA /* smart-ordering */,
+				364ECEBF2DE4340D001A2ACA /* smart-orderingTests */,
+				364ECEC92DE4340D001A2ACA /* smart-orderingUITests */,
+				364ECEB02DE4340B001A2ACA /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		364ECEB02DE4340B001A2ACA /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				364ECEAF2DE4340B001A2ACA /* smart-ordering.app */,
+				364ECEBC2DE4340D001A2ACA /* smart-orderingTests.xctest */,
+				364ECEC62DE4340D001A2ACA /* smart-orderingUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		364ECEAE2DE4340B001A2ACA /* smart-ordering */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 364ECED02DE4340D001A2ACA /* Build configuration list for PBXNativeTarget "smart-ordering" */;
+			buildPhases = (
+				364ECEAB2DE4340B001A2ACA /* Sources */,
+				364ECEAC2DE4340B001A2ACA /* Frameworks */,
+				364ECEAD2DE4340B001A2ACA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				364ECEB12DE4340B001A2ACA /* smart-ordering */,
+			);
+			name = "smart-ordering";
+			packageProductDependencies = (
+			);
+			productName = "smart-ordering";
+			productReference = 364ECEAF2DE4340B001A2ACA /* smart-ordering.app */;
+			productType = "com.apple.product-type.application";
+		};
+		364ECEBB2DE4340D001A2ACA /* smart-orderingTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 364ECED32DE4340D001A2ACA /* Build configuration list for PBXNativeTarget "smart-orderingTests" */;
+			buildPhases = (
+				364ECEB82DE4340D001A2ACA /* Sources */,
+				364ECEB92DE4340D001A2ACA /* Frameworks */,
+				364ECEBA2DE4340D001A2ACA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				364ECEBE2DE4340D001A2ACA /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				364ECEBF2DE4340D001A2ACA /* smart-orderingTests */,
+			);
+			name = "smart-orderingTests";
+			packageProductDependencies = (
+			);
+			productName = "smart-orderingTests";
+			productReference = 364ECEBC2DE4340D001A2ACA /* smart-orderingTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		364ECEC52DE4340D001A2ACA /* smart-orderingUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 364ECED62DE4340D001A2ACA /* Build configuration list for PBXNativeTarget "smart-orderingUITests" */;
+			buildPhases = (
+				364ECEC22DE4340D001A2ACA /* Sources */,
+				364ECEC32DE4340D001A2ACA /* Frameworks */,
+				364ECEC42DE4340D001A2ACA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				364ECEC82DE4340D001A2ACA /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				364ECEC92DE4340D001A2ACA /* smart-orderingUITests */,
+			);
+			name = "smart-orderingUITests";
+			packageProductDependencies = (
+			);
+			productName = "smart-orderingUITests";
+			productReference = 364ECEC62DE4340D001A2ACA /* smart-orderingUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		364ECEA72DE4340B001A2ACA /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1630;
+				LastUpgradeCheck = 1630;
+				TargetAttributes = {
+					364ECEAE2DE4340B001A2ACA = {
+						CreatedOnToolsVersion = 16.3;
+					};
+					364ECEBB2DE4340D001A2ACA = {
+						CreatedOnToolsVersion = 16.3;
+						TestTargetID = 364ECEAE2DE4340B001A2ACA;
+					};
+					364ECEC52DE4340D001A2ACA = {
+						CreatedOnToolsVersion = 16.3;
+						TestTargetID = 364ECEAE2DE4340B001A2ACA;
+					};
+				};
+			};
+			buildConfigurationList = 364ECEAA2DE4340B001A2ACA /* Build configuration list for PBXProject "smart-ordering" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 364ECEA62DE4340B001A2ACA;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 364ECEB02DE4340B001A2ACA /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				364ECEAE2DE4340B001A2ACA /* smart-ordering */,
+				364ECEBB2DE4340D001A2ACA /* smart-orderingTests */,
+				364ECEC52DE4340D001A2ACA /* smart-orderingUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		364ECEAD2DE4340B001A2ACA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		364ECEBA2DE4340D001A2ACA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		364ECEC42DE4340D001A2ACA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		364ECEAB2DE4340B001A2ACA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		364ECEB82DE4340D001A2ACA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		364ECEC22DE4340D001A2ACA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		364ECEBE2DE4340D001A2ACA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 364ECEAE2DE4340B001A2ACA /* smart-ordering */;
+			targetProxy = 364ECEBD2DE4340D001A2ACA /* PBXContainerItemProxy */;
+		};
+		364ECEC82DE4340D001A2ACA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 364ECEAE2DE4340B001A2ACA /* smart-ordering */;
+			targetProxy = 364ECEC72DE4340D001A2ACA /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		364ECECE2DE4340D001A2ACA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		364ECECF2DE4340D001A2ACA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		364ECED12DE4340D001A2ACA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "danghoang.jp.smart-ordering";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		364ECED22DE4340D001A2ACA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "danghoang.jp.smart-ordering";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		364ECED42DE4340D001A2ACA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "danghoang.jp.smart-orderingTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/smart-ordering.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/smart-ordering";
+			};
+			name = Debug;
+		};
+		364ECED52DE4340D001A2ACA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "danghoang.jp.smart-orderingTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/smart-ordering.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/smart-ordering";
+			};
+			name = Release;
+		};
+		364ECED72DE4340D001A2ACA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "danghoang.jp.smart-orderingUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "smart-ordering";
+			};
+			name = Debug;
+		};
+		364ECED82DE4340D001A2ACA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "danghoang.jp.smart-orderingUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "smart-ordering";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		364ECEAA2DE4340B001A2ACA /* Build configuration list for PBXProject "smart-ordering" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				364ECECE2DE4340D001A2ACA /* Debug */,
+				364ECECF2DE4340D001A2ACA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		364ECED02DE4340D001A2ACA /* Build configuration list for PBXNativeTarget "smart-ordering" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				364ECED12DE4340D001A2ACA /* Debug */,
+				364ECED22DE4340D001A2ACA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		364ECED32DE4340D001A2ACA /* Build configuration list for PBXNativeTarget "smart-orderingTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				364ECED42DE4340D001A2ACA /* Debug */,
+				364ECED52DE4340D001A2ACA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		364ECED62DE4340D001A2ACA /* Build configuration list for PBXNativeTarget "smart-orderingUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				364ECED72DE4340D001A2ACA /* Debug */,
+				364ECED82DE4340D001A2ACA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 364ECEA72DE4340B001A2ACA /* Project object */;
+}
