@@ -13,6 +13,7 @@ struct MenuListView: View {
     @StateObject private var menuViewModel = MenuViewModel() // Initialize here or pass from parent
     @EnvironmentObject var appSettings: AppSettings // For restaurantId if needed
     @EnvironmentObject var userViewModel: UserViewModel // For currentRestaurantId
+    @State private var hapticFeedbackLight = UIImpactFeedbackGenerator(style: .light)
 
     @State private var showingAddItemSheet = false
     @State private var itemToEdit: MenuItem? = nil // Used to trigger edit sheet
@@ -27,12 +28,14 @@ struct MenuListView: View {
                 SearchBar(text: $menuViewModel.searchText, placeholder: "Search menu items...")
                     .padding(.horizontal)
                     .padding(.top)
+                    .accessibilityLabel("Search menu items by name, Japanese name, or code")
 
                 // Category Filter Picker (optional, could be tabs or a dropdown)
                 CategoryFilterView(categories: menuViewModel.categories,
                                    selectedCategoryId: $menuViewModel.selectedCategoryIdFilter)
                     .padding(.horizontal)
                     .padding(.bottom, 5)
+                    .accessibilityLabel("Filter menu items by category")
                 
                 // Menu Items List
                 List {
@@ -84,11 +87,13 @@ struct MenuListView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
+                    hapticFeedbackLight.impactOccurred()
                     itemToEdit = nil // Ensure it's a new item
                     showingAddItemSheet = true
                 } label: {
                     Label("Add Item", systemImage: "plus.circle.fill")
                 }
+                .accessibilityLabel("Add new menu item")
             }
             ToolbarItem(placement: .navigationBarLeading) {
                 if menuViewModel.isLoading {
@@ -140,12 +145,14 @@ struct SearchBar: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.gray)
             TextField(placeholder, text: $text)
+                .accessibilityLabel(placeholder) // Label for the text field itself
                 .foregroundColor(.primary)
             if !text.isEmpty {
                 Button(action: { self.text = "" }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.gray)
                 }
+                .accessibilityLabel("Clear search text")
             }
         }
         .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
@@ -160,7 +167,7 @@ struct CategoryFilterView: View {
     @Binding var selectedCategoryId: String?
 
     var body: some View {
-        Picker("Filter by Category", selection: $selectedCategoryId) {
+        Picker("Filter menu items by category", selection: $selectedCategoryId) { // More descriptive label
             Text("All Categories").tag(String?.none) // Option for no filter
             ForEach(categories.sorted()) { category in
                 Text(category.name).tag(category.id as String?)
@@ -176,6 +183,7 @@ struct MenuItemRow: View {
     let item: MenuItem
     var onEdit: () -> Void
     var onToggleAvailability: () -> Void
+    @State private var hapticFeedbackLight = UIImpactFeedbackGenerator(style: .light)
 
 
     var body: some View {
@@ -184,12 +192,15 @@ struct MenuItemRow: View {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .empty:
-                        ProgressView().frame(width: 60, height: 60)
+                        ProgressView()
+                            .frame(width: 60, height: 60)
+                            .accessibilityLabel("Loading image for \(item.name)")
                     case .success(let image):
                         image.resizable()
                              .aspectRatio(contentMode: .fill)
                              .frame(width: 60, height: 60)
                              .clipShape(RoundedRectangle(cornerRadius: 8))
+                             .accessibilityLabel("Image of \(item.name)")
                     case .failure:
                         Image(systemName: "fork.knife.circle.fill") // Placeholder icon
                             .resizable()
@@ -198,6 +209,7 @@ struct MenuItemRow: View {
                             .foregroundColor(.gray)
                             .background(Color.gray.opacity(0.1))
                             .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .accessibilityLabel("Image placeholder for \(item.name)")
                     @unknown default:
                         EmptyView()
                     }
@@ -210,6 +222,7 @@ struct MenuItemRow: View {
                     .foregroundColor(.gray)
                     .background(Color.gray.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .accessibilityLabel("No image available for \(item.name)")
             }
 
             VStack(alignment: .leading) {
@@ -230,13 +243,16 @@ struct MenuItemRow: View {
             Image(systemName: item.isAvailable ? "eye.fill" : "eye.slash.fill")
                 .foregroundColor(item.isAvailable ? .green : .orange)
                 .onTapGesture {
+                    hapticFeedbackLight.impactOccurred()
                     onToggleAvailability()
                 }
+                .accessibilityLabel(item.isAvailable ? "Toggle to set item as unavailable" : "Toggle to set item as available")
         }
         .contentShape(Rectangle()) // Make the whole row tappable for context menu or navigation
         .onTapGesture { // For triggering edit on tap (alternative to swipe or button)
              onEdit()
         }
+        .accessibilityHint("Tap to edit \(item.name) or swipe for more actions.")
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
                 // Trigger delete in ViewModel
@@ -284,55 +300,71 @@ struct MenuItemEditView: View {
     @State private var existingImageUrl: String?
 
     @State private var showImagePicker = false
+    @State private var showingDeleteConfirm = false // For delete confirmation
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
+
 
     var isEditing: Bool { menuItemToEdit != nil }
 
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text(isEditing ? "Edit Menu Item" : "Add New Menu Item")) {
+                Section(header: Text("Image")) { // Section 1: Image
                     imageSelectionSection
-                    
+                }
+
+                Section(header: Text("Core Details")) { // Section 2: Core Details
                     TextField("Name (e.g., Pho Bo)", text: $name)
+                        .accessibilityLabel("Menu item name")
                     TextField("Japanese Name (optional)", text: $nameJP)
-                    TextField("Price (e.g., 12.50)", text: $price)
-                        .keyboardType(.decimalPad)
-                    TextField("Item Code (optional, e.g., F001)", text: $code)
-                    
+                        .accessibilityLabel("Menu item Japanese name")
+                    TextField("Price (e.g., 1200)", text: $price)
+                        .keyboardType(.numberPad)
+                        .accessibilityLabel("Menu item price")
                     Picker("Category", selection: $categoryId) {
                         ForEach(viewModel.categories.sorted()) { category in
                             Text(category.name).tag(category.id ?? "")
                         }
                     }
+                    .accessibilityLabel(viewModel.categories.isEmpty ? "No categories available. Please add a category first." : "Select menu item category. Currently selected: \(viewModel.categories.first(where: {$0.id == categoryId})?.name ?? "None")")
                     if viewModel.categories.isEmpty && categoryId.isEmpty {
                         Text("No categories available. Please add a category first.")
                             .foregroundColor(.orange)
                     }
-                    
+                    TextField("Item Code (optional, e.g., F001)", text: $code)
+                        .autocapitalization(.allCharacters)
+                        .accessibilityLabel("Menu item code")
+                }
+
+                Section(header: Text("Additional Information")) { // Section 3: Additional Info
+                    TextEditorWithPlaceholder(text: $descriptionText, placeholder: "Description (e.g., ingredients, allergens)")
+                        .frame(minHeight: 100)
+                        .accessibilityLabel("Menu item description")
                     TextField("Display Order in Category", text: $displayOrder)
                          .keyboardType(.numberPad)
+                         .accessibilityLabel("Menu item display order in category")
+                }
 
-                    TextEditorWithPlaceholder(text: $descriptionText, placeholder: "Description (optional)")
-                        .frame(height: 100)
-                    
+                Section(header: Text("Availability")) { // Section 4: Availability
                     Toggle("Available for Ordering", isOn: $isAvailable)
+                        .accessibilityLabel("Toggle item availability for ordering")
                 }
                 
-                Section {
+                Section { // Section 5: Actions
                     Button(isEditing ? "Save Changes" : "Add Item") {
+                        hapticFeedbackMedium.impactOccurred()
                         saveMenuItem()
                     }
                     .disabled(name.isEmpty || price.isEmpty || categoryId.isEmpty || viewModel.isLoading)
+                    .accessibilityLabel(isEditing ? "Save changes to menu item" : "Add new menu item")
                     
                     if isEditing {
                         Button("Delete Item", role: .destructive) {
-                            // Add confirmation alert before deleting
-                            if let item = menuItemToEdit {
-                                Task { await viewModel.deleteMenuItem(item) }
-                                dismiss()
-                            }
+                            hapticFeedbackLight.impactOccurred()
+                            showingDeleteConfirm = true
                         }
                         .disabled(viewModel.isLoading)
+                        .accessibilityLabel("Delete menu item")
                     }
                 }
                 
@@ -345,18 +377,34 @@ struct MenuItemEditView: View {
                 }
             }
             .navigationTitle(isEditing ? "Edit Item" : "New Item")
-            .navigationBarItems(leading: Button("Cancel") { dismiss() })
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .accessibilityLabel("Cancel editing menu item")
+                }
+            }
             .onAppear(perform: populateFormForEditing)
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(selectedImage: $selectedImage)
             }
-            .onChange(of: selectedImage) { newImage in
+            .onChange(of: selectedImage) { _, newImage in
                  guard let uiImage = newImage else {
                      imageDataForUpload = nil
                      return
                  }
-                 // Compress and convert UIImage to Data
-                 imageDataForUpload = uiImage.jpegData(compressionQuality: 0.7) // Adjust quality
+                 imageDataForUpload = uiImage.jpegData(compressionQuality: 0.7)
+            }
+            .alert("Confirm Delete", isPresented: $showingDeleteConfirm) {
+                Button("Delete Item", role: .destructive) {
+                    hapticFeedbackMedium.impactOccurred()
+                    if let item = menuItemToEdit {
+                        Task { await viewModel.deleteMenuItem(item) }
+                        dismiss()
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Are you sure you want to delete the item \"\(name)\"? This action cannot be undone.")
             }
         }
     }
@@ -368,32 +416,39 @@ struct MenuItemEditView: View {
                 if let imageData = imageDataForUpload, let uiImage = UIImage(data: imageData) {
                     Image(uiImage: uiImage)
                         .resizable().scaledToFit().frame(height: 100).cornerRadius(8)
+                        .accessibilityLabel("Newly selected image preview")
                 } else if let imageUrlString = existingImageUrl, let url = URL(string: imageUrlString) {
                     AsyncImage(url: url) { phase in
                         if let image = phase.image {
                             image.resizable().scaledToFit().frame(height: 100).cornerRadius(8)
+                                .accessibilityLabel("Current item image")
                         } else if phase.error != nil {
                             Image(systemName: "photo.fill").frame(height: 100).foregroundColor(.gray)
+                                .accessibilityLabel("Error loading item image")
                         } else {
                             ProgressView().frame(height: 100)
+                                .accessibilityLabel("Loading item image")
                         }
                     }
                 } else {
                     Image(systemName: "photo.on.rectangle.angled").resizable().scaledToFit().frame(height: 60).foregroundColor(.gray)
+                        .accessibilityLabel("No image placeholder")
                 }
                 Spacer()
                 Button(imageDataForUpload != nil || existingImageUrl != nil ? "Change Image" : "Add Image") {
                     showImagePicker = true
                 }
+                .accessibilityLabel(imageDataForUpload != nil || existingImageUrl != nil ? "Change menu item image" : "Add menu item image")
             }
             if imageDataForUpload != nil || existingImageUrl != nil {
                  Button("Remove Image", role: .destructive) {
                      selectedImage = nil
                      imageDataForUpload = nil
-                     existingImageUrl = nil // Signal that the image should be removed on save
+                     existingImageUrl = nil
                  }
                  .font(.caption)
                  .padding(.top, 2)
+                 .accessibilityLabel("Remove menu item image")
             }
         }
     }
