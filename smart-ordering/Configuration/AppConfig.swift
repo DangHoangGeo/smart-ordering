@@ -56,9 +56,6 @@ class AppConfig {
         
         self.defaultRestaurantId = "thuanVietShinKoiwa" // Example ID
 
-        // Initialize based on current environment (or UserDefault for demo toggle)
-        refreshMode() // Call refreshMode to set initial values based on demo mode if needed
-
         // Default printer settings (can be made configurable later via UI)
         // These are from your old PRINTER struct
         self.kitchenPrinter = Printer(
@@ -77,6 +74,9 @@ class AppConfig {
             wifiName: "THUAN VIET",
             wifiPass: "thuanviet5625"
         )
+        
+        // Initialize based on current environment (or UserDefault for demo toggle)
+        refreshMode() // Call refreshMode to set initial values based on demo mode if needed
     }
 
     // Call this if isDemoMode changes in AppSettings
@@ -110,6 +110,12 @@ class AppConfig {
         static let finished = "02_finished"     // Order paid and completed
         static let cancelled = "01_cancelled"   // Order cancelled by staff/customer
         static let removed = "00_removed"       // Item removed by staff (soft delete)
+    }
+    
+    struct PaymentMethods { // These were global in your old code.
+        static let cash = "Cash"
+        static let payPay = "PayPay" // Consistent camelCase
+        static let creditCard = "Credit Card" // More descriptive
     }
     
     // Printer Commands (ESC/POS) - from your old PRINTER_CODE
