@@ -46,7 +46,6 @@ struct TablesListView: View {
                     .padding(.horizontal) // Apply horizontal padding to the grid container
                 }
             }
-            .navigationTitle("Tables")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {

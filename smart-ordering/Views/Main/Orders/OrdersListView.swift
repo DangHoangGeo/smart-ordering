@@ -122,7 +122,11 @@ struct OrdersListView: View {
     }
 
     private var newOrdersSection: some View {
-        Section { // Header moved into content for HStack with BadgeView
+        Section(header: HStack {
+            Text("New Web Orders")
+            BadgeView(count: ordersViewModel.newOrders.count)
+        }
+        .font(.headline)) {
             if ordersViewModel.isLoadingNewOrders && ordersViewModel.newOrders.isEmpty {
                 ProgressView("Loading new orders...").centeredInList()
             } else if ordersViewModel.newOrders.isEmpty {
@@ -136,14 +140,6 @@ struct OrdersListView: View {
                 }
             }
         }
-    }
-
-    } header: { // Using the newer Section header style
-        HStack {
-            Text("New Web Orders")
-            BadgeView(count: ordersViewModel.newOrders.count)
-        }
-        .font(.headline) // Apply font to HStack for consistent header appearance
     }
 
     private var activeOrdersSection: some View {

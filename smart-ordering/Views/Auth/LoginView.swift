@@ -36,12 +36,9 @@ struct LoginView: View {
                         VStack {
                             Image("app_logo")
                                 .accessibilityLabel("Application Logo")
-                                .resizable()
                                 .scaledToFit()
                                 .frame(width: 100, height: 100)
                                 .clipShape(RoundedRectangle(cornerRadius: 20))
-                                .shadow(color: .gray.opacity(0.4), radius: 5, y: 5)
-                                .padding(.top, geometry.safeAreaInsets.top + 20) // Adjust top padding
 
                             Text("Smart Ordering")
                                 .font(.system(size: 28, weight: .bold, design: .rounded))

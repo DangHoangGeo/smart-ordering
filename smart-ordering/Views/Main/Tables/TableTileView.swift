@@ -7,7 +7,7 @@ import SwiftUI
 // TableStatus Color/Display Extension
 // This should ideally be in a global scope or part of the TableStatus model definition.
 // Making it public for broader accessibility if models are in a different module.
-public extension TableStatus {
+extension TableStatus {
     var color: Color { // Text color for status
         switch self {
         case .available: return .green

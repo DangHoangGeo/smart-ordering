@@ -24,100 +24,127 @@ struct MenuListView: View {
                 ProgressView("Loading Menu...")
                     .padding()
             } else {
-                // Search Bar
-                SearchBar(text: $menuViewModel.searchText, placeholder: "Search menu items...")
-                    .padding(.horizontal)
-                    .padding(.top)
-                    .accessibilityLabel("Search menu items by name, Japanese name, or code")
-
-                // Category Filter Picker (optional, could be tabs or a dropdown)
-                CategoryFilterView(categories: menuViewModel.categories,
-                                   selectedCategoryId: $menuViewModel.selectedCategoryIdFilter)
-                    .padding(.horizontal)
-                    .padding(.bottom, 5)
-                    .accessibilityLabel("Filter menu items by category")
-                
-                // Menu Items List
-                List {
-                    ForEach(menuViewModel.itemsGroupedForDisplay, id: \.category.id) { section in
-                        Section(header: Text(section.category.name).font(.headline)) {
-                            if section.items.isEmpty {
-                                Text("No items in this category\(menuViewModel.searchText.isEmpty ? "" : " matching your search").")
-                                    .foregroundColor(.secondary)
-                                    .padding()
-                            } else {
-                                ForEach(section.items) { item in
-                                    MenuItemRow(item: item, onEdit: {
-                                        self.itemToEdit = item
-                                    }, onToggleAvailability: {
-                                        Task { await menuViewModel.toggleItemAvailability(item) }
-                                    })
-                                }
-                                .onDelete { indexSet in
-                                     deleteItems(at: indexSet, in: section.category)
-                                }
-                            }
-                        }
-                    }
-                     if menuViewModel.itemsGroupedForDisplay.isEmpty && !menuViewModel.isLoading {
-                         Text(menuViewModel.searchText.isEmpty ? "No menu items found. Add some!" : "No items match your search.")
-                             .foregroundColor(.secondary)
-                             .padding()
-                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                     }
-                }
-                .listStyle(InsetGroupedListStyle()) // Or PlainListStyle
-            }
-            
-            // Display error/success messages
-            if let message = menuViewModel.errorMessage ?? menuViewModel.successMessage {
-                 Text(message)
-                    .foregroundColor(menuViewModel.errorMessage != nil ? .red : .green)
-                    .padding()
-                    .transition(.opacity.animation(.easeIn))
-                    .onAppear { // Auto-dismiss message
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            if menuViewModel.errorMessage == message { menuViewModel.errorMessage = nil }
-                            if menuViewModel.successMessage == message { menuViewModel.successMessage = nil }
-                        }
-                    }
+                mainContent
             }
         }
         .navigationTitle("Menu Management")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    hapticFeedbackLight.impactOccurred()
-                    itemToEdit = nil // Ensure it's a new item
-                    showingAddItemSheet = true
-                } label: {
-                    Label("Add Item", systemImage: "plus.circle.fill")
-                }
-                .accessibilityLabel("Add new menu item")
+                addButton
             }
             ToolbarItem(placement: .navigationBarLeading) {
-                if menuViewModel.isLoading {
-                    ProgressView()
-                } else {
-                    EditButton() // For reordering or batch deleting (if implemented)
-                }
+                leadingToolbarContent
             }
         }
         .sheet(isPresented: $showingAddItemSheet) {
-            // When itemToEdit is nil, it's for adding a new item
             MenuItemEditView(viewModel: menuViewModel, menuItemToEdit: nil)
         }
         .sheet(item: $itemToEdit) { item in
-            // When itemToEdit is not nil, it's for editing an existing item
             MenuItemEditView(viewModel: menuViewModel, menuItemToEdit: item)
         }
-        .task { // Use .task for async operations on appear
-            if menuViewModel.menuItems.isEmpty { // Load only if not already loaded
-                // Set the correct restaurantId for the viewModel
+        .task {
+            if menuViewModel.menuItems.isEmpty {
                 if let currentRestaurantId = userViewModel.appUser?.currentRestaurantId {
-                     menuViewModel.restaurantId = currentRestaurantId
+                    menuViewModel.restaurantId = currentRestaurantId
                 }
                 await menuViewModel.loadInitialData()
+            }
+        }
+    }
+
+    private var mainContent: some View {
+        VStack {
+            SearchBar(text: $menuViewModel.searchText, placeholder: "Search menu items...")
+                .padding(.horizontal)
+                .padding(.top)
+                .accessibilityLabel("Search menu items by name, Japanese name, or code")
+
+            CategoryFilterView(categories: menuViewModel.categories,
+                            selectedCategoryId: $menuViewModel.selectedCategoryIdFilter)
+                .padding(.horizontal)
+                .padding(.bottom, 5)
+                .accessibilityLabel("Filter menu items by category")
+            
+            menuList
+            
+            if let message = menuViewModel.errorMessage ?? menuViewModel.successMessage {
+                messageView(message)
+            }
+        }
+    }
+
+    private var menuList: some View {
+        List {
+            ForEach(menuViewModel.itemsGroupedForDisplay, id: \.category.id) { section in
+                Section(header: Text(section.category.name).font(.headline)) {
+                    menuSectionContent(section)
+                }
+            }
+            if menuViewModel.itemsGroupedForDisplay.isEmpty && !menuViewModel.isLoading {
+                emptyStateView
+            }
+        }
+        .listStyle(InsetGroupedListStyle())
+    }
+
+    private func menuSectionContent(_ section: (category: MenuCategory, items: [MenuItem])) -> some View {
+        Group {
+            if section.items.isEmpty {
+                Text("No items in this category\(menuViewModel.searchText.isEmpty ? "" : " matching your search").")
+                    .foregroundColor(.secondary)
+                    .padding()
+            } else {
+                ForEach(section.items) { item in
+                    MenuItemRow(item: item,
+                              onEdit: { self.itemToEdit = item },
+                              onToggleAvailability: {
+                                  Task { await menuViewModel.toggleItemAvailability(item) }
+                              })
+                }
+                .onDelete { indexSet in
+                    deleteItems(at: indexSet, in: section.category)
+                }
+            }
+        }
+    }
+
+    private var emptyStateView: some View {
+        Text(menuViewModel.searchText.isEmpty ? "No menu items found. Add some!" : "No items match your search.")
+            .foregroundColor(.secondary)
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func messageView(_ message: String) -> some View {
+        Text(message)
+            .foregroundColor(menuViewModel.errorMessage != nil ? .red : .green)
+            .padding()
+            .transition(.opacity.animation(.easeIn))
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    if menuViewModel.errorMessage == message { menuViewModel.errorMessage = nil }
+                    if menuViewModel.successMessage == message { menuViewModel.successMessage = nil }
+                }
+            }
+    }
+
+    private var addButton: some View {
+        Button {
+            hapticFeedbackLight.impactOccurred()
+            itemToEdit = nil
+            showingAddItemSheet = true
+        } label: {
+            Label("Add Item", systemImage: "plus.circle.fill")
+        }
+        .accessibilityLabel("Add new menu item")
+    }
+
+    private var leadingToolbarContent: some View {
+        Group {
+            if menuViewModel.isLoading {
+                ProgressView()
+            } else {
+                EditButton()
             }
         }
     }
@@ -301,6 +328,7 @@ struct MenuItemEditView: View {
 
     @State private var showImagePicker = false
     @State private var showingDeleteConfirm = false // For delete confirmation
+    @State private var hapticFeedbackLight = UIImpactFeedbackGenerator(style: .light)
     @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
 
 

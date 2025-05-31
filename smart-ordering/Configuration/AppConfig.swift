@@ -84,7 +84,7 @@ class AppConfig {
         let isDemo = UserDefaults.standard.bool(forKey: "isDemoMode") // Or get from AppSettings
 
         if isDemo {
-            self.firestoreCollectionPrefix = "staging_demo" // Or a specific demo prefix
+            self.firestoreCollectionPrefix = "staging" // Or a specific demo prefix
             self.webAppBaseURL = "https://demo.yourwebapp.com" // Replace
         } else {
             #if DEBUG

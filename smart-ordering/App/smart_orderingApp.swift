@@ -61,12 +61,18 @@ struct ContentView: View {
 
 // Placeholder LoadingView
 struct LoadingView: View {
+    @EnvironmentObject var userViewModel: UserViewModel
     var text: String = "Loading..."
     var body: some View {
         VStack {
             ProgressView()
             Text(text)
                 .padding(.top)
+            if let error = userViewModel.errorMessage {
+                Text(error)
+                    .foregroundColor(.red)
+                    .padding()
+            }
         }
     }
 }

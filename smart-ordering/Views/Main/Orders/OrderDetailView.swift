@@ -342,6 +342,7 @@ struct ItemNoteEditSheetView: View {
     let orderId: String
     @Environment(\.dismiss) var dismiss
     @State private var noteText: String
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
 
     init(item: Binding<OrderItem>, ordersViewModel: OrdersViewModel, orderId: String) {
         self._item = item
@@ -412,7 +413,8 @@ struct AddItemsToOrderSheet: View {
     @ObservedObject var menuViewModel: MenuViewModel // For existing menu items
 
     @Environment(\.dismiss) var dismiss
-    
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
+
     // State for selecting existing menu items
     @State private var selectedExistingItems: [MenuItem: Int] = [:]
     @State private var menuSearchText: String = ""
