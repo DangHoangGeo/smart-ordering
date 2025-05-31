@@ -11,7 +11,12 @@ struct OrderDetailView: View {
     @State private var showingAddItemSheet = false
     @State private var showingPaymentSheet = false
     @State private var itemToEditQuantity: OrderItem? = nil
+    @State private var itemToEditNote: OrderItem? = nil // For note editing sheet
     @State private var showingCancelConfirmation = false // Added for cancel order confirmation
+
+    // Haptic feedback generator
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
+    @State private var hapticFeedbackLight = UIImpactFeedbackGenerator(style: .light) // For non-critical actions
 
     // For toast messages within this view
     @State private var showDetailMessageToast = false
@@ -45,20 +50,52 @@ struct OrderDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                headerSection
-                summarySection
-                itemsSection
-                Spacer()
+        GeometryReader { geometry in
+            if geometry.size.width > 700 { // iPad landscape-like width
+                HStack(alignment: .top, spacing: 20) {
+                    // Left Column
+                    ScrollView { // Make left column scrollable if content exceeds height
+                        VStack(alignment: .leading, spacing: 16) {
+                            headerSection
+                            summarySection
+                            Spacer() // Pushes content up if not enough to fill
+                        }
+                        .padding([.leading, .trailing, .top]) // Add padding for scrollview content
+                    }
+                    .frame(width: geometry.size.width * 0.4)
+                    .background(Color(UIColor.systemGroupedBackground)) // Optional: give columns distinct backgrounds
+
+                    // Right Column (Items & Actions)
+                    ScrollView { // Make item list scrollable independently
+                        VStack(alignment: .leading, spacing: 16) { // Add a VStack for spacing
+                            itemsSection
+                        }
+                        .padding([.trailing, .leading, .top]) // Add padding for scrollview content
+                    }
+                    .frame(maxWidth: .infinity) // Takes remaining space
+                }
+                // .padding(.top) // Add padding to the HStack if needed, or rely on ScrollView's padding
+            } else { // Single column for smaller screens or portrait
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        headerSection
+                        summarySection
+                        itemsSection
+                        Spacer() // Pushes content up if not enough to fill
+                    }
+                    .padding() // Standard padding for single column
+                }
             }
-            .padding()
         }
         .navigationTitle("Order #\(order.orderNumber)")
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 if isOrderEditable && !ordersViewModel.isPrinting && !ordersViewModel.isLoadingActiveOrders {
-                    Button { showingAddItemSheet = true } label: { Label("Add Item", systemImage: "plus.circle.fill") }
+                    Button {
+                        hapticFeedbackLight.impactOccurred()
+                        showingAddItemSheet = true
+                    } label: { Label("Add Item", systemImage: "plus.circle.fill") }
+                    .accessibilityLabel("Add item to order")
                 }
             }
         }
@@ -67,6 +104,18 @@ struct OrderDetailView: View {
         }
         .sheet(item: $itemToEditQuantity) { itemToEdit in
              EditOrderItemQuantitySheet(item: itemToEdit, order: $order, ordersViewModel: ordersViewModel)
+        }
+        .sheet(item: $itemToEditNote) { itemNoteToEdit in
+            // We need to find the binding to the item in the order.items array
+            // This ensures that if the sheet makes direct local changes (though it shouldn't here, VM handles it),
+            // they are on the correct source. More importantly, it's about passing the correct item context.
+            // The view model will handle the actual update.
+            if let index = order.items.firstIndex(where: { $0.id == itemNoteToEdit.id }) {
+                ItemNoteEditSheetView(item: $order.items[index], ordersViewModel: ordersViewModel, orderId: order.id!)
+            } else {
+                // Fallback or error view if item is not found - should not happen if logic is correct
+                Text("Error: Item not found for note editing.")
+            }
         }
         .sheet(isPresented: $showingPaymentSheet) {
             PaymentSheetView(order: $order, ordersViewModel: ordersViewModel)
@@ -92,6 +141,7 @@ struct OrderDetailView: View {
         }
         .alert("Cancel Order", isPresented: $showingCancelConfirmation) {
             Button("Yes, Cancel", role: .destructive) {
+                hapticFeedbackMedium.impactOccurred() // Haptic for destructive action
                 Task {
                     await ordersViewModel.cancelOrder(order: self.order)
                     // Optionally dismiss view after successful cancellation
@@ -181,14 +231,23 @@ struct OrderDetailView: View {
                 ForEach(displayableItemIndices, id: \.self) { index in
                     // Check if index is valid before accessing, crucial if array can change
                     if order.items.indices.contains(index) {
+                        let currentOrderItem = order.items[index]
+                        let menuItem = menuViewModel.menuItems.first(where: { $0.id == currentOrderItem.menuItemId })
+
                         OrderItemRow(
                             item: $order.items[index],
                             isOrderEditable: isOrderEditable,
                             ordersViewModel: ordersViewModel,
                             order: order,
+                            menuItemImageUrl: menuItem?.imageUrl, // Pass the image URL
                             onEditQuantity: {
                                 if order.items.indices.contains(index) { // Double check index validity
                                     self.itemToEditQuantity = order.items[index]
+                                }
+                            },
+                            onEditNotes: { // New callback
+                                if order.items.indices.contains(index) {
+                                    self.itemToEditNote = order.items[index]
                                 }
                             }
                         )
@@ -226,6 +285,7 @@ struct OrderDetailView: View {
     private var printPayAndCancelButtons: some View {
         VStack(spacing: 12) {
             Button {
+                hapticFeedbackMedium.impactOccurred()
                 Task { await ordersViewModel.printOrderToKitchen(order: order) }
             } label: { Label("Print to Kitchen", systemImage: "printer.dotmatrix.fill").frame(maxWidth: .infinity) }
             .buttonStyle(.borderedProminent).tint(.orange)
@@ -233,15 +293,21 @@ struct OrderDetailView: View {
 
             if isOrderPayable {
                 Button {
+                    hapticFeedbackMedium.impactOccurred()
                     showingPaymentSheet = true
                 } label: { Label("Proceed to Payment", systemImage: "creditcard.fill").frame(maxWidth: .infinity) }
                 .buttonStyle(.borderedProminent).tint(.green)
                 .disabled(ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders)
             }
             
-            Button("Cancel Order") {
+            Button {
+                hapticFeedbackLight.impactOccurred() // Light haptic for bringing up a confirmation
                 showingCancelConfirmation = true
+            } label: {
+                Label("Cancel Order", systemImage: "xmark.octagon.fill")
+                    .frame(maxWidth: .infinity)
             }
+            .accessibilityLabel("Cancel this order")
             .buttonStyle(.bordered)
             .tint(.red)
             .disabled(ordersViewModel.isLoadingActiveOrders || ordersViewModel.isPrinting)
@@ -269,6 +335,75 @@ struct OrderDetailView: View {
     }
 }
 
+// MARK: - Item Note Edit Sheet
+struct ItemNoteEditSheetView: View {
+    @Binding var item: OrderItem
+    @ObservedObject var ordersViewModel: OrdersViewModel
+    let orderId: String
+    @Environment(\.dismiss) var dismiss
+    @State private var noteText: String
+
+    init(item: Binding<OrderItem>, ordersViewModel: OrdersViewModel, orderId: String) {
+        self._item = item
+        self.ordersViewModel = ordersViewModel
+        self.orderId = orderId
+        // Initialize with current notes, or empty string if nil
+        self._noteText = State(initialValue: item.wrappedValue.notes ?? "")
+    }
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 15) {
+                TextEditor(text: $noteText)
+                    .accessibilityLabel("Item notes text editor")
+                    .frame(height: 150)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(UIColor.systemGray3), lineWidth: 1)
+                    )
+                    .padding(.horizontal)
+
+                Button("Save Note") {
+                    hapticFeedbackMedium.impactOccurred()
+                    Task {
+                        let notesToSave = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        await ordersViewModel.updateOrderItemNotes(
+                            orderId: orderId,
+                            itemId: item.id,
+                            newNotes: notesToSave.isEmpty ? nil : notesToSave
+                        )
+                        // The @Binding 'item' in OrderItemRow should reflect this change
+                        // if OrdersViewModel correctly updates the order in its published array,
+                        // and OrderDetailView's @State order gets updated.
+                        dismiss()
+                    }
+                }
+                .accessibilityLabel("Save item note")
+                .buttonStyle(.borderedProminent)
+                .padding(.horizontal)
+
+                Spacer()
+            }
+            .padding(.top, 20)
+            .navigationTitle("Edit Note for \(item.name)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .accessibilityLabel("Cancel editing note")
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { // Clear button
+                        noteText = ""
+                    } label: { Image(systemName: "clear") }
+                    .accessibilityLabel("Clear note text")
+                }
+            }
+        }
+    }
+}
+
 
 // MARK: - Sheet for Adding Items to Order
 struct AddItemsToOrderSheet: View {
@@ -281,6 +416,7 @@ struct AddItemsToOrderSheet: View {
     // State for selecting existing menu items
     @State private var selectedExistingItems: [MenuItem: Int] = [:]
     @State private var menuSearchText: String = ""
+    @FocusState private var isCustomItemNameFieldFocused: Bool // For auto-focus
 
     // State for adding a custom item
     @State private var showingCustomItemForm = false
@@ -300,9 +436,17 @@ struct AddItemsToOrderSheet: View {
                     Text("From Menu").tag(false)
                     Text("Custom Item").tag(true)
                 }
+                .accessibilityLabel("Select mode for adding items: from menu or custom item")
                 .pickerStyle(SegmentedPickerStyle())
                 .padding(.horizontal)
                 .padding(.top)
+                .onChange(of: showingCustomItemForm) { _, isNowCustom in
+                    if isNowCustom {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { // Delay for sheet animation
+                            isCustomItemNameFieldFocused = true
+                        }
+                    }
+                }
 
                 if showingCustomItemForm {
                     customItemEntryForm
@@ -387,17 +531,23 @@ struct AddItemsToOrderSheet: View {
         Form {
             Section(header: Text("Custom Item Details")) {
                 TextField("Item Name (e.g., Special Request)", text: $customItemName)
+                    .focused($isCustomItemNameFieldFocused)
+                    .accessibilityLabel("Custom item name")
                 HStack {
                     Text("Price (¥):")
                     TextField("0", text: $customItemPriceString)
                         .keyboardType(.decimalPad)
+                        .accessibilityLabel("Custom item price")
                 }
                 Stepper("Quantity: \(customItemQuantity)", value: $customItemQuantity, in: 1...20)
+                    .accessibilityLabel("Custom item quantity stepper, current quantity \(customItemQuantity)")
                 TextField("Notes (optional)", text: $customItemNotes, axis: .vertical)
                     .lineLimit(3)
+                    .accessibilityLabel("Custom item notes")
                 Picker("Category for Printing", selection: $customItemCategoryForPrint) {
                     ForEach(customCategoriesForPrint, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")) }
                 }
+                .accessibilityLabel("Custom item category for printing")
             }
         }
     }
@@ -406,18 +556,24 @@ struct AddItemsToOrderSheet: View {
         VStack {
             if showingCustomItemForm {
                 Button("Add Custom Item to Order") {
+                    // Consider haptic if this is a primary action in this sheet
+                    hapticFeedbackMedium.impactOccurred()
                     addCustomItemToOrder()
                 }
                 .padding()
                 .buttonStyle(.borderedProminent)
                 .disabled(customItemName.isEmpty || (Double(customItemPriceString) == nil) || customItemQuantity == 0)
+                .accessibilityLabel("Add custom item to order button")
             } else {
                 if !selectedExistingItems.isEmpty {
                      Button("Add \(selectedExistingItems.values.reduce(0, +)) Selected Item(s)") {
+                        // Consider haptic
+                        hapticFeedbackMedium.impactOccurred()
                         addSelectedMenuItemsToOrder()
                     }
                     .padding()
                     .buttonStyle(.borderedProminent)
+                    .accessibilityLabel("Add \(selectedExistingItems.values.reduce(0, +)) selected menu items to order button")
                 }
             }
         }
@@ -480,6 +636,7 @@ struct AddItemRow: View {
             Stepper(value: $selectedQuantity, in: 0...20) {
                 Text("Qty: \(selectedQuantity)")
             }
+            .accessibilityLabel("Quantity of \(menuItem.name) to add, current quantity \(selectedQuantity)")
         }
     }
 }
@@ -490,12 +647,17 @@ struct EditOrderItemQuantitySheet: View {
     @ObservedObject var ordersViewModel: OrdersViewModel
     @Environment(\.dismiss) var dismiss
     @State private var newQuantity: Int
+    @State private var quantityString: String = "" // For TextField
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
+
 
     init(item: OrderItem, order: Binding<Order>, ordersViewModel: OrdersViewModel) {
         self.item = item
         self._order = order
         self.ordersViewModel = ordersViewModel
-        _newQuantity = State(initialValue: item.quantity)
+        let initialQuantity = item.quantity
+        _newQuantity = State(initialValue: initialQuantity)
+        _quantityString = State(initialValue: "\(initialQuantity)")
     }
 
     var body: some View {
@@ -503,19 +665,63 @@ struct EditOrderItemQuantitySheet: View {
             VStack(spacing: 20) {
                 Text("Edit Quantity for").font(.title2.bold())
                 Text(item.name).font(.title3)
-                Stepper("Quantity: \(newQuantity)", value: $newQuantity, in: 0...50).padding()
+
+                HStack {
+                    TextField("Enter Quantity", text: $quantityString)
+                        .keyboardType(.numberPad)
+                        .frame(width: 80)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .multilineTextAlignment(.center)
+                        .accessibilityLabel("Quantity input field, current value \(quantityString)")
+                        .onChange(of: quantityString) { _, newValue in
+                            if let qty = Int(newValue), qty >= 0 {
+                                let maxQty = 50
+                                newQuantity = min(qty, maxQty)
+                                if qty > maxQty {
+                                    quantityString = "\(maxQty)"
+                                }
+                            } else if newValue.isEmpty {
+                                newQuantity = 0
+                            } else {
+                                quantityString = "\(newQuantity)"
+                            }
+                        }
+                    Stepper("Quantity: \(newQuantity)", value: $newQuantity, in: 0...50)
+                        .accessibilityLabel("Quantity stepper, current quantity \(newQuantity)")
+                        .onChange(of: newQuantity) { _, currentQty in
+                            quantityString = "\(currentQty)"
+                        }
+                }
+                .padding()
+                .onAppear {
+                    quantityString = "\(newQuantity)"
+                }
+
                 Button(newQuantity == 0 ? "Remove Item" : "Update Quantity") {
+                    hapticFeedbackMedium.impactOccurred()
+                    if let qtyFromString = Int(quantityString), qtyFromString != newQuantity {
+                        newQuantity = qtyFromString >= 0 ? min(qtyFromString, 50) : 0
+                    } else if Int(quantityString) == nil && !quantityString.isEmpty {
+                        quantityString = "\(newQuantity)"
+                    }
+
                     Task {
                         await ordersViewModel.updateOrderItemQuantity(orderId: order.id!, itemId: item.id, newQuantity: newQuantity)
                         dismiss()
                     }
                 }
+                .accessibilityLabel(newQuantity == 0 ? "Remove item from order" : "Update item quantity")
                 .buttonStyle(.borderedProminent).tint(newQuantity == 0 ? .red : .blue)
                 Spacer()
             }
             .padding()
             .navigationTitle("Edit Item")
-            .toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .accessibilityLabel("Cancel editing quantity")
+                }
+            }
         }
     }
 }
@@ -526,6 +732,8 @@ struct PaymentSheetView: View {
     @Binding var order: Order
     @ObservedObject var ordersViewModel: OrdersViewModel
     @Environment(\.dismiss) var dismiss
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
+
 
     @State private var selectedPaymentMethod: String = AppConfig.PaymentMethods.cash
     @State private var amountTenderedString: String = ""
@@ -564,6 +772,7 @@ struct PaymentSheetView: View {
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 60)
+                            .accessibilityLabel("Order discount percentage input")
                             .onChange(of: discountPercentString) { oldValue, newValue in
                                 if newValue.isEmpty { return }
                                 if let val = Double(newValue) {
@@ -581,10 +790,10 @@ struct PaymentSheetView: View {
                 }
 
                 Section("Payment") {
-                    // ... (content as provided before) ...
                     Picker("Payment Method", selection: $selectedPaymentMethod) {
                         ForEach(paymentMethods, id: \.self) { Text($0.capitalized) }
                     }
+                    .accessibilityLabel("Select payment method, current method \(selectedPaymentMethod)")
                     
                     if selectedPaymentMethod == AppConfig.PaymentMethods.cash {
                         HStack {
@@ -601,18 +810,38 @@ struct PaymentSheetView: View {
                                         amountTenderedString = oldValue
                                     }
                                 }
+                                .accessibilityLabel("Amount tendered input")
                         }
+                        HStack(spacing: 10) {
+                            ForEach([1000, 2000, 5000, 10000], id: \.self) { amount in
+                                Button("¥\(amount)") {
+                                    amountTenderedString = String(amount)
+                                }
+                                .buttonStyle(.bordered)
+                                .fontWeight(.medium)
+                                .accessibilityLabel("Set tendered amount to \(amount) yen")
+                            }
+                            Button("Exact") {
+                                amountTenderedString = String(format: "%.0f", finalTotal)
+                            }
+                            .buttonStyle(.bordered)
+                            .fontWeight(.medium)
+                            .accessibilityLabel("Set tendered amount to exact total")
+                        }
+                        .padding(.top, 5)
+                        .frame(maxWidth: .infinity, alignment: .center)
+
                         if let change = changeDue, change >= 0 {
-                            HStack { Text("Change Due:"); Spacer(); Text(formattedPrice(change)).foregroundColor(.green) }
+                            HStack { Text("Change Due:"); Spacer(); Text(formattedPrice(change)).font(.headline).foregroundColor(.green) }
                         } else if amountTendered != nil && amountTendered! < finalTotal {
-                             Text("Amount tendered is less than total.").foregroundColor(.red).font(.caption)
+                             Text("Amount tendered is less than total.").foregroundColor(.red).font(.caption).frame(maxWidth: .infinity, alignment: .center)
                         }
                     }
                 }
                 
                 Section {
-                    // ... (content as provided before) ...
                     Button("Finalize & Pay") {
+                        hapticFeedbackMedium.impactOccurred()
                         Task {
                             await ordersViewModel.finalizeOrder(
                                 order: order,

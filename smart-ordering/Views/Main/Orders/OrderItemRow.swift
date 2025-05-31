@@ -12,20 +12,42 @@ struct OrderItemRow: View {
     let isOrderEditable: Bool
     let ordersViewModel: OrdersViewModel // To call update functions
     let order: Order // Pass the whole order for context for updates
+    let menuItemImageUrl: String? // New property for menu item image
     // let orderRowHelper: OrderRow // No longer needed if statusColor is local or static
 
     var onEditQuantity: () -> Void
+    var onEditNotes: () -> Void // New callback for editing notes
     
     @State private var showCancelConfirm = false // For confirmation alert
     @State private var showRemoveConfirm = false // For confirmation alert
 
 
     var body: some View {
-        VStack(alignment: .leading) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(item.name)
-                        .font(.headline)
+        HStack(alignment: .top, spacing: 10) { // Main HStack for image + content
+            if let imageUrlString = menuItemImageUrl, let url = URL(string: imageUrlString) {
+                AsyncImage(url: url) { image in
+                    image.resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Image(systemName: "photo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .foregroundColor(.gray.opacity(0.3))
+                }
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.gray.opacity(0.2), lineWidth: 1))
+            } else {
+                // Placeholder if no image URL, to maintain layout consistency (optional)
+                // For now, let it collapse if no image, or use below:
+                // Image(systemName: "fork.knife.circle").resizable().scaledToFit().frame(width: 40, height: 40).foregroundColor(.gray.opacity(0.3))
+            }
+
+            VStack(alignment: .leading) { // Existing content VStack
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(item.name)
+                            .font(.headline)
                         .strikethrough(item.status == AppConfig.OrderStatus.removed || item.status == AppConfig.OrderStatus.cancelled, color: .red)
                     if let nameJP = item.nameJP, !nameJP.isEmpty {
                         Text(nameJP).font(.caption).foregroundColor(.secondary)
@@ -50,12 +72,31 @@ struct OrderItemRow: View {
                 Text(formattedPrice(item.totalPrice))
                     .font(.subheadline.weight(.medium))
             }
-            if let notes = item.notes, !notes.isEmpty {
-                Text("Notes: \(notes)").font(.caption).italic().foregroundColor(.gray)
+
+            // Notes Display and Editing
+            if isOrderEditable {
+                HStack {
+                    if let notes = item.notes, !notes.isEmpty {
+                        Text("Notes: \(notes)")
+                            .font(.caption).italic().foregroundColor(.gray)
+                            .lineLimit(2) // Show a couple of lines
+                        Spacer()
+                        Button { onEditNotes() } label: { Image(systemName: "pencil.line") }
+                            .padding(.leading, 5)
+                    } else {
+                        Button("Add Note") { onEditNotes() }
+                            .font(.caption)
+                    }
+                }
+                .padding(.top, 2)
+            } else if let notes = item.notes, !notes.isEmpty {
+                Text("Notes: \(notes)").font(.caption).italic().foregroundColor(.gray).lineLimit(2)
             }
+
 
             if isOrderEditable {
                 HStack {
+                    // If more item statuses are added, consider using a Menu { } Picker for scalability.
                     Picker("Status", selection: $item.status) {
                         Text("Pending").tag(AppConfig.OrderStatus.pending)
                         Text("Preparing").tag(AppConfig.OrderStatus.preparing)

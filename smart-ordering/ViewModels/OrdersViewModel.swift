@@ -33,6 +33,33 @@ class OrdersViewModel: ObservableObject {
         }
     }
 
+    func updateOrderItemNotes(orderId: String, itemId: String, newNotes: String?) async {
+        guard var currentOrder = findOrderLocally(orderId: orderId),
+              let itemIndex = currentOrder.items.firstIndex(where: { $0.id == itemId }) else {
+            errorMessage = "Order or item not found for notes update."
+            return
+        }
+
+        errorMessage = nil
+        successMessage = nil
+
+        let trimmedNotes = newNotes?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Update notes: set to nil if trimmed string is empty, otherwise use trimmed string
+        currentOrder.items[itemIndex].notes = (trimmedNotes?.isEmpty ?? true) ? nil : trimmedNotes
+        currentOrder.items[itemIndex].lastUpdatedAt = Timestamp(date: Date())
+        currentOrder.lastUpdatedAt = Timestamp(date: Date())
+
+        do {
+            // Assuming orderService.updateOrder can save the whole order with modified item notes
+            try await orderService.updateOrder(currentOrder)
+            updateLocalOrder(currentOrder) // This should correctly update the @Published orders arrays
+            successMessage = "Item notes updated successfully."
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
+        } catch {
+            self.errorMessage = (error as? OrderServiceError ?? OrderServiceError.firestoreError(error)).localizedDescription
+        }
+    }
+
     deinit {
         newOrdersListener?.remove()
         print("OrdersViewModel deinitialized, listener removed.")

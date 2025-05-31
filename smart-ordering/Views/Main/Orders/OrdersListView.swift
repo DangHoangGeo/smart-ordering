@@ -16,6 +16,9 @@ struct OrdersListView: View {
     @State private var toastType: ToastType = .info // Renamed from OrdersListView.ToastType for clarity
     enum ToastType { case info, success, error }
 
+    // Haptic feedback generator
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
+
     var body: some View {
         List {
             newOrdersSection
@@ -28,15 +31,23 @@ struct OrdersListView: View {
                 if ordersViewModel.isLoadingNewOrders || ordersViewModel.isLoadingActiveOrders || ordersViewModel.isPrinting {
                     ProgressView().frame(width: 20, height: 20)
                 } else {
-                    Button { Task { await ordersViewModel.refreshAllData() } } label: {
+                    Button {
+                        hapticFeedbackMedium.impactOccurred()
+                        Task { await ordersViewModel.refreshAllData() }
+                    } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
+                    .accessibilityLabel("Refresh orders list")
                 }
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                Button { showingCreateOrderSheet = true } label: {
+                Button {
+                    hapticFeedbackMedium.impactOccurred()
+                    showingCreateOrderSheet = true
+                } label: {
                     Label("New Order", systemImage: "plus.circle.fill")
                 }
+                .accessibilityLabel("Create new order")
             }
         }
         .sheet(isPresented: $showingCreateOrderSheet, onDismiss: {
@@ -111,7 +122,7 @@ struct OrdersListView: View {
     }
 
     private var newOrdersSection: some View {
-        Section(header: Text("New Web Orders (\(ordersViewModel.newOrders.count))").font(.headline)) {
+        Section { // Header moved into content for HStack with BadgeView
             if ordersViewModel.isLoadingNewOrders && ordersViewModel.newOrders.isEmpty {
                 ProgressView("Loading new orders...").centeredInList()
             } else if ordersViewModel.newOrders.isEmpty {
@@ -127,12 +138,20 @@ struct OrdersListView: View {
         }
     }
 
+    } header: { // Using the newer Section header style
+        HStack {
+            Text("New Web Orders")
+            BadgeView(count: ordersViewModel.newOrders.count)
+        }
+        .font(.headline) // Apply font to HStack for consistent header appearance
+    }
+
     private var activeOrdersSection: some View {
-        Section(header: Text("Active Orders (\(ordersViewModel.activeOrders.count))").font(.headline)) {
+        Section(header: Text("Active Orders (\(ordersViewModel.activeOrders.count))").font(.headline)) { // Original header is fine
             if ordersViewModel.isLoadingActiveOrders && ordersViewModel.activeOrders.isEmpty {
                 ProgressView("Loading active orders...").centeredInList()
             } else if ordersViewModel.activeOrders.isEmpty {
-                Text("No active orders.")
+                Text("No active orders. Tap the '+' button above to create one!") // Enhanced empty state
                     .foregroundColor(.secondary).padding(.vertical).centeredInList()
             } else {
                 ForEach(ordersViewModel.activeOrders) { order in
@@ -163,6 +182,30 @@ struct OrdersListView: View {
                 }
         } else {
             EmptyView()
+        }
+    }
+}
+
+// MARK: - BadgeView
+// (Can be in its own file, but included here for the subtask)
+
+struct BadgeView: View {
+    let count: Int
+    var backgroundColor: Color = .red
+    var textColor: Color = .white
+
+    var body: some View {
+        if count > 0 {
+            Text("\(count)")
+                .font(.caption.bold())
+                .accessibilityLabel("\(count) new items") // Example label
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(backgroundColor)
+                .foregroundColor(textColor)
+                .clipShape(Capsule())
+        } else {
+            EmptyView() // Don't show the badge if count is 0
         }
     }
 }

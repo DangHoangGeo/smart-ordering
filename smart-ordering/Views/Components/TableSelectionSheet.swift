@@ -3,13 +3,18 @@ import SwiftUI
 struct TableSelectionSheet: View {
     @Environment(\.dismiss) var dismiss
     @Binding var selectedTables: Set<Table>
-    @StateObject private var tablesViewModel = TablesViewModel(restaurantId: "1") // Replace "1" with actual restaurant ID
+    // Ensure restaurantId is passed correctly or use a shared instance from Environment
+    @StateObject private var tablesViewModel = TablesViewModel(restaurantId: AppConfig.shared.defaultRestaurantId)
     
-    @State private var internalSelectedTables: Set<Table> // Use an internal state for selection
-    
+    @State private var internalSelectedTables: Set<Table>
+    @State private var hapticFeedbackLight = UIImpactFeedbackGenerator(style: .light)
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
+
     init(selectedTables: Binding<Set<Table>>) {
         self._selectedTables = selectedTables
         self._internalSelectedTables = State(initialValue: selectedTables.wrappedValue)
+        // Consider passing restaurantId if it's dynamic
+        // For now, using default from AppConfig as an example if this sheet is used globally
     }
 
     var body: some View {
@@ -18,6 +23,7 @@ struct TableSelectionSheet: View {
                 Text("Select Tables")
                     .font(.largeTitle)
                     .padding()
+                    .accessibilityAddTraits(.isHeader)
 
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 16)], spacing: 16) {
@@ -25,6 +31,7 @@ struct TableSelectionSheet: View {
                             TableTileView(table: table)
                                 .onTapGesture {
                                     if table.status == .available {
+                                        hapticFeedbackLight.impactOccurred()
                                         if internalSelectedTables.contains(table) {
                                             internalSelectedTables.remove(table)
                                         } else {
@@ -36,7 +43,11 @@ struct TableSelectionSheet: View {
                                     RoundedRectangle(cornerRadius: 8)
                                         .stroke(internalSelectedTables.contains(table) ? Color.accentColor : Color.clear, lineWidth: 3)
                                 )
-                                .opacity(table.status == .available ? 1.0 : 0.5) // Dim unavailable tables
+                                .opacity(table.status == .available ? 1.0 : 0.5)
+                                .accessibilityElement(children: .combine) // Combine children for row-level actions
+                                .accessibilityLabel("Table \(table.code), Capacity \(table.capacity), Status \(table.status.displayName)")
+                                .accessibilityHint(table.status == .available ? (internalSelectedTables.contains(table) ? "Tap to deselect table" : "Tap to select table") : "Table is not available for selection")
+                                .accessibilityAddTraits(table.status == .available ? (internalSelectedTables.contains(table) ? .isSelected : .isButton) : .isStaticText)
                         }
                     }
                     .padding()
@@ -48,22 +59,27 @@ struct TableSelectionSheet: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
+                    .accessibilityLabel("Cancel table selection")
 
                     Spacer()
 
                     Button("Done") {
-                        selectedTables = internalSelectedTables // Update the binding
+                        hapticFeedbackMedium.impactOccurred()
+                        selectedTables = internalSelectedTables
                         dismiss()
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .disabled(internalSelectedTables.isEmpty)
+                    .accessibilityLabel("Confirm selected tables")
                 }
                 .padding()
             }
-            .navigationBarHidden(true) // Hide default navigation bar
+            .navigationBarHidden(true)
             .onAppear {
 				Task {
+                    // Ensure restaurantId is correct before fetching
+                    // tablesViewModel.restaurantId = ... // if dynamic
 					await tablesViewModel.fetchTables()
 				}
             }
