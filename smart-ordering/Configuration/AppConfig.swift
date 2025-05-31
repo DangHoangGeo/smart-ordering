@@ -54,7 +54,7 @@ class AppConfig {
         self.webAppBaseURL = "https://yourwebapp.com" // Replace with your actual production URL
         #endif
         
-        self.defaultRestaurantId = "thuanVietShinKoiwa" // Example ID
+        self.defaultRestaurantId = "shin-koi-wa" // Example ID
 
         // Default printer settings (can be made configurable later via UI)
         // These are from your old PRINTER struct

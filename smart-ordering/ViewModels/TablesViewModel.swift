@@ -77,7 +77,7 @@ class TablesViewModel: ObservableObject {
         errorMessage = nil
         do {
             let newTable = Table(id: UUID().uuidString, restaurantId: restaurantId, code: code, capacity: capacity, status: .available, displayOrder: displayOrder, currentOrderId: nil, section: section)
-            try await TableService.shared.addTable(newTable,restaurantId: restaurantId)
+            try await TableService.shared.addTable(restaurantId: restaurantId,table: newTable)
         } catch {
             self.errorMessage = error.localizedDescription
             print("Error adding table: \(error.localizedDescription)")

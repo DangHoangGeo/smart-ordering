@@ -81,10 +81,13 @@ struct OrderDetailView: View {
         .onReceive(ordersViewModel.$errorMessage) { message in
             if let msg = message, !msg.isEmpty {
                 self.detailToastMessage = msg; self.detailToastType = .error; self.showDetailMessageToast = true
-                // Important: Decide where the VM's message gets cleared.
-                // If OrdersListView also shows it, avoid double clearing or race conditions.
-                // For now, let OrderDetailView clear it if it's the active view.
-                 DispatchQueue.main.async { ordersViewModel.errorMessage = nil }
+                DispatchQueue.main.async { ordersViewModel.errorMessage = nil }
+            }
+        }
+        .onReceive(ordersViewModel.$successMessage) { message in
+            if let msg = message, !msg.isEmpty {
+                self.detailToastMessage = msg; self.detailToastType = .success; self.showDetailMessageToast = true
+                DispatchQueue.main.async { ordersViewModel.successMessage = nil }
             }
         }
         .alert("Cancel Order", isPresented: $showingCancelConfirmation) {
@@ -100,12 +103,6 @@ struct OrderDetailView: View {
             Button("No", role: .cancel) { }
         } message: {
             Text("Are you sure you want to cancel order #\(order.orderNumber)? This action cannot be undone and will free up the tables.")
-        }
-        .onReceive(ordersViewModel.$successMessage) { message in
-            if let msg = message, !msg.isEmpty {
-                self.detailToastMessage = msg; self.detailToastType = .success; self.showDetailMessageToast = true
-                 DispatchQueue.main.async { ordersViewModel.successMessage = nil }
-            }
         }
         .task {
             if menuViewModel.menuItems.isEmpty {
@@ -564,7 +561,20 @@ struct PaymentSheetView: View {
                         Text("Order Discount (%):")
                         Spacer()
                         TextField("0", text: $discountPercentString)
-                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 60)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 60)
+                            .onChange(of: discountPercentString) { oldValue, newValue in
+                                if newValue.isEmpty { return }
+                                if let val = Double(newValue) {
+                                    let clamped = min(max(val, 0), 100)
+                                    if clamped != val {
+                                        discountPercentString = String(format: "%.0f", clamped)
+                                    }
+                                } else if Double(newValue.filter { "0123456789.".contains($0) }) == nil {
+                                    discountPercentString = oldValue
+                                }
+                            }
                     }
                     HStack { Text("Discount Amount:"); Spacer(); Text("-\(formattedPrice(orderDiscountAmount))").foregroundColor(.orange) }
                     HStack { Text("Final Total:"); Spacer(); Text(formattedPrice(finalTotal)).font(.headline.bold()) }
@@ -580,7 +590,17 @@ struct PaymentSheetView: View {
                         HStack {
                             Text("Amount Tendered:")
                             Spacer()
-                            TextField("Enter amount", text: $amountTenderedString).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            TextField("Enter amount", text: $amountTenderedString)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .onChange(of: amountTenderedString) { oldValue, newValue in
+                                    if newValue.isEmpty { return }
+                                    if let val = Double(newValue) {
+                                        if val < 0 { amountTenderedString = "0" }
+                                    } else if Double(newValue.filter { "0123456789.".contains($0) }) == nil {
+                                        amountTenderedString = oldValue
+                                    }
+                                }
                         }
                         if let change = changeDue, change >= 0 {
                             HStack { Text("Change Due:"); Spacer(); Text(formattedPrice(change)).foregroundColor(.green) }

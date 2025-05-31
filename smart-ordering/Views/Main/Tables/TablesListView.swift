@@ -82,6 +82,7 @@ struct TablesListView: View {
             }
             .sheet(isPresented: $showingAddTableSheet) {
                 AddTableView()
+                    .environmentObject(tablesViewModel)
             }
         }
     }

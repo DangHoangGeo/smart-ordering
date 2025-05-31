@@ -32,6 +32,15 @@ struct OrderItemRow: View {
                     }
                 }
                 Spacer()
+                // Status indicator
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(statusColorForItem(item.status))
+                        .frame(width: 12, height: 12)
+                    Text(item.status.replacingOccurrences(of: "_", with: " ").capitalized)
+                        .font(.caption.bold())
+                        .foregroundColor(statusColorForItem(item.status))
+                }
                 Text("x\(item.quantity)")
                     .font(.headline)
                     .padding(.horizontal, 6)
