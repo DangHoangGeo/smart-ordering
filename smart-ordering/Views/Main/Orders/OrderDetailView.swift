@@ -11,6 +11,7 @@ struct OrderDetailView: View {
     @State private var showingAddItemSheet = false
     @State private var showingPaymentSheet = false
     @State private var itemToEditQuantity: OrderItem? = nil
+    @State private var showingCancelConfirmation = false // Added for cancel order confirmation
 
     // For toast messages within this view
     @State private var showDetailMessageToast = false
@@ -85,6 +86,20 @@ struct OrderDetailView: View {
                 // For now, let OrderDetailView clear it if it's the active view.
                  DispatchQueue.main.async { ordersViewModel.errorMessage = nil }
             }
+        }
+        .alert("Cancel Order", isPresented: $showingCancelConfirmation) {
+            Button("Yes, Cancel", role: .destructive) {
+                Task {
+                    await ordersViewModel.cancelOrder(order: self.order)
+                    // Optionally dismiss view after successful cancellation
+                    if ordersViewModel.errorMessage == nil {
+                        dismiss()
+                    }
+                }
+            }
+            Button("No", role: .cancel) { }
+        } message: {
+            Text("Are you sure you want to cancel order #\(order.orderNumber)? This action cannot be undone and will free up the tables.")
         }
         .onReceive(ordersViewModel.$successMessage) { message in
             if let msg = message, !msg.isEmpty {
@@ -199,7 +214,7 @@ struct OrderDetailView: View {
         }
         
         if isOrderEditable {
-             printAndPayButtons
+             printPayAndCancelButtons
                 .padding(.top)
         } else if order.status == AppConfig.OrderStatus.finished {
             Button {
@@ -211,7 +226,7 @@ struct OrderDetailView: View {
         }
     }
     
-    private var printAndPayButtons: some View {
+    private var printPayAndCancelButtons: some View {
         VStack(spacing: 12) {
             Button {
                 Task { await ordersViewModel.printOrderToKitchen(order: order) }
@@ -226,6 +241,13 @@ struct OrderDetailView: View {
                 .buttonStyle(.borderedProminent).tint(.green)
                 .disabled(ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders)
             }
+            
+            Button("Cancel Order") {
+                showingCancelConfirmation = true
+            }
+            .buttonStyle(.bordered)
+            .tint(.red)
+            .disabled(ordersViewModel.isLoadingActiveOrders || ordersViewModel.isPrinting)
         }
     }
 

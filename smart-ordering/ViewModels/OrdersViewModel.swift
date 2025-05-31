@@ -18,6 +18,7 @@ class OrdersViewModel: ObservableObject {
 
     private let orderService = OrderService.shared
     private let printerService = PrinterService.shared
+    private let tableService = TableService.shared // Added TableService
     private let printFormatter = PrintFormatter()
     private var newOrdersListener: ListenerRegistration?
     var restaurantId: String
@@ -117,21 +118,30 @@ class OrdersViewModel: ObservableObject {
             order.id = orderDocId
             
             // Add to local list immediately for responsiveness
-            // Ensure it's added to the correct list based on its initial status (pending)
-            // If newOrders list is actively listened to, it might appear there automatically.
-            // For manual orders, they might go directly to active if UI flow implies it.
-            // Let's assume manual orders go to 'activeOrders' and are not picked by 'newOrdersListener'.
-            // Or, if 'pending' makes them appear in newOrders, that's fine too.
-            // For now, adding to activeOrders for immediate UI presence for manual creation.
             if !activeOrders.contains(where: {$0.id == order.id}) {
                  activeOrders.append(order)
                  activeOrders.sort(by: { $0.orderedAt.dateValue() < $1.orderedAt.dateValue() })
             }
 
-            successMessage = "Order \(order.orderNumber) created for table(s) \(order.tableDisplayString)."
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
-            isLoadingActiveOrders = false
-            return order
+            // Update table statuses to .occupied
+            do {
+                try await tableService.updateMultipleTableStatuses(
+                    restaurantId: self.restaurantId,
+                    tableIds: order.tableIds,
+                    newStatus: .occupied,
+                    currentOrderId: order.id
+                )
+                successMessage = "Order \(order.orderNumber) created for table(s) \(order.tableDisplayString)."
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
+                isLoadingActiveOrders = false
+                return order
+            } catch {
+                // If table status update fails, consider rolling back order creation or logging a critical error
+                print("Error updating table status after order creation: \(error.localizedDescription)")
+                self.errorMessage = "Order created, but failed to update table status: \(error.localizedDescription)"
+                isLoadingActiveOrders = false
+                return nil // Or return order and let UI handle partial success
+            }
         } catch {
             self.errorMessage = (error as? OrderServiceError ?? OrderServiceError.firestoreError(error)).localizedDescription
             isLoadingActiveOrders = false
@@ -454,8 +464,18 @@ class OrdersViewModel: ObservableObject {
             successMessage = "Order \(order.orderNumber) finalized and paid."
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
             
-            // TODO: Trigger table status update (make table available). This involves TableService/ViewModel.
-            // await TableService.shared.updateTableStatusForOrderCompletion(tableIds: orderToFinalize.tableIds, restaurantId: self.restaurantId)
+            // Update table statuses to .available
+            do {
+                try await tableService.updateMultipleTableStatuses(
+                    restaurantId: self.restaurantId,
+                    tableIds: orderToFinalize.tableIds,
+                    newStatus: .available,
+                    currentOrderId: nil
+                )
+            } catch {
+                print("Error updating table status after order finalization: \(error.localizedDescription)")
+                self.errorMessage = "Order finalized, but failed to free up tables: \(error.localizedDescription)"
+            }
 
         } catch {
             self.errorMessage = (error as? OrderServiceError ?? OrderServiceError.firestoreError(error)).localizedDescription
@@ -463,6 +483,45 @@ class OrdersViewModel: ObservableObject {
         isLoadingActiveOrders = false
     }
     
+    // MARK: - Order Cancellation
+    func cancelOrder(order: Order) async {
+        guard let orderId = order.id else {
+            self.errorMessage = "Order ID missing, cannot cancel."
+            return
+        }
+        isLoadingActiveOrders = true // Or a specific 'isCancelling' flag
+        errorMessage = nil
+        successMessage = nil
+
+        do {
+            // 1. Update order status to cancelled
+            try await orderService.updateOrderStatus(
+                restaurantId: self.restaurantId,
+                orderId: orderId,
+                newStatus: AppConfig.OrderStatus.cancelled
+            )
+            
+            // 2. Free up associated tables
+            try await tableService.updateMultipleTableStatuses(
+                restaurantId: self.restaurantId,
+                tableIds: order.tableIds,
+                newStatus: .available,
+                currentOrderId: nil
+            )
+            
+            // 3. Update local activeOrders list
+            updateLocalOrderStatus(orderId: orderId, newStatus: AppConfig.OrderStatus.cancelled, successful: true)
+            
+            successMessage = "Order \(order.orderNumber) has been cancelled and tables freed."
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
+
+        } catch {
+            self.errorMessage = (error as? OrderServiceError ?? OrderServiceError.firestoreError(error)).localizedDescription
+            print("Error cancelling order: \(error.localizedDescription)")
+        }
+        isLoadingActiveOrders = false
+    }
+
     // MARK: - Notifications
     private func triggerNewOrderNotification(_ order: Order?) {
         guard let order = order else { return }
