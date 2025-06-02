@@ -18,6 +18,7 @@ class OrdersViewModel: ObservableObject {
 
     private let orderService = OrderService.shared
     private let printerService = PrinterService.shared
+    private let tableService = TableService.shared // Added TableService
     private let printFormatter = PrintFormatter()
     private var newOrdersListener: ListenerRegistration?
     var restaurantId: String
@@ -29,6 +30,33 @@ class OrdersViewModel: ObservableObject {
         listenForNewOrders()
         Task {
             await fetchActiveOrders()
+        }
+    }
+
+    func updateOrderItemNotes(orderId: String, itemId: String, newNotes: String?) async {
+        guard let currentOrder = findOrderLocally(orderId: orderId),
+              let itemIndex = currentOrder.items.firstIndex(where: { $0.id == itemId }) else {
+            errorMessage = "Order or item not found for notes update."
+            return
+        }
+
+        errorMessage = nil
+        successMessage = nil
+
+        let trimmedNotes = newNotes?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Update notes: set to nil if trimmed string is empty, otherwise use trimmed string
+        currentOrder.items[itemIndex].notes = (trimmedNotes?.isEmpty ?? true) ? nil : trimmedNotes
+        currentOrder.items[itemIndex].lastUpdatedAt = Timestamp(date: Date())
+        currentOrder.lastUpdatedAt = Timestamp(date: Date())
+
+        do {
+            // Assuming orderService.updateOrder can save the whole order with modified item notes
+            try await orderService.updateOrder(currentOrder)
+            updateLocalOrder(currentOrder) // This should correctly update the @Published orders arrays
+            successMessage = "Item notes updated successfully."
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
+        } catch {
+            self.errorMessage = (error as? OrderServiceError ?? OrderServiceError.firestoreError(error)).localizedDescription
         }
     }
 
@@ -53,8 +81,11 @@ class OrdersViewModel: ObservableObject {
                 
                 // Check for genuinely new orders to trigger notification
                 let currentOrderIds = Set(self.newOrders.compactMap { $0.id })
-                let genuinelyNewOrders = self.newOrders.filter { !oldOrderIds.contains($0.id!) }
-                
+                _ = currentOrderIds
+                let genuinelyNewOrders = self.newOrders.compactMap { order in
+                    guard let id = order.id, !oldOrderIds.contains(id) else { return nil }
+                    return order
+                }
                 if !genuinelyNewOrders.isEmpty {
                     self.triggerNewOrderNotification(genuinelyNewOrders.first)
                 }
@@ -103,35 +134,47 @@ class OrdersViewModel: ObservableObject {
 
         let newOrderNumber = await orderService.generateOrderNumber(restaurantId: self.restaurantId)
         
-        var order = Order(
+        let order = Order(
             restaurantId: self.restaurantId,
             orderNumber: newOrderNumber,
+            id: nil,
             tableIds: tableIds,
-            numberOfGuests: numberOfGuests,
+            items: [],
             status: AppConfig.OrderStatus.pending,
-            createdByStaffId: createdByStaffId
+            orderedAt: Timestamp(date: Date()),
+            numberOfGuests: numberOfGuests
         )
         
         do {
             let orderDocId = try await orderService.createOrder(order)
-            order.id = orderDocId
+            let mutableOrder = order
+            mutableOrder.id = orderDocId
             
             // Add to local list immediately for responsiveness
-            // Ensure it's added to the correct list based on its initial status (pending)
-            // If newOrders list is actively listened to, it might appear there automatically.
-            // For manual orders, they might go directly to active if UI flow implies it.
-            // Let's assume manual orders go to 'activeOrders' and are not picked by 'newOrdersListener'.
-            // Or, if 'pending' makes them appear in newOrders, that's fine too.
-            // For now, adding to activeOrders for immediate UI presence for manual creation.
             if !activeOrders.contains(where: {$0.id == order.id}) {
-                 activeOrders.append(order)
+                 activeOrders.append(mutableOrder)
                  activeOrders.sort(by: { $0.orderedAt.dateValue() < $1.orderedAt.dateValue() })
             }
 
-            successMessage = "Order \(order.orderNumber) created for table(s) \(order.tableDisplayString)."
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
-            isLoadingActiveOrders = false
-            return order
+            // Update table statuses to .occupied
+            do {
+                try await tableService.updateMultipleTableStatuses(
+                    restaurantId: self.restaurantId,
+                    tableIds: order.tableIds,
+                    newStatus: .occupied,
+                    currentOrderId: order.id
+                )
+                successMessage = "Order \(order.orderNumber) created for table(s) \(order.tableDisplayString)."
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
+                isLoadingActiveOrders = false
+                return order
+            } catch {
+                // If table status update fails, consider rolling back order creation or logging a critical error
+                print("Error updating table status after order creation: \(error.localizedDescription)")
+                self.errorMessage = "Order created, but failed to update table status: \(error.localizedDescription)"
+                isLoadingActiveOrders = false
+                return nil // Or return order and let UI handle partial success
+            }
         } catch {
             self.errorMessage = (error as? OrderServiceError ?? OrderServiceError.firestoreError(error)).localizedDescription
             isLoadingActiveOrders = false
@@ -228,23 +271,18 @@ class OrdersViewModel: ObservableObject {
             try await orderService.updateOrderItemStatus(restaurantId: self.restaurantId, orderId: orderId, itemId: itemId, newStatus: newStatus)
             
             // Update local order's item for immediate UI feedback
-            var listToUpdate: UnsafeMutablePointer<[Order]>? = nil
-            var orderIndex: Int? = nil
-
             if let idx = newOrders.firstIndex(where: { $0.id == orderId }) {
-                listToUpdate = UnsafeMutablePointer(&newOrders)
-                orderIndex = idx
+                if let itemIdx = newOrders[idx].items.firstIndex(where: { $0.id == itemId }) {
+                    newOrders[idx].items[itemIdx].status = newStatus
+                    newOrders[idx].items[itemIdx].lastUpdatedAt = Timestamp(date:Date())
+                    newOrders[idx].lastUpdatedAt = Timestamp(date:Date())
+                }
             } else if let idx = activeOrders.firstIndex(where: { $0.id == orderId }) {
-                listToUpdate = UnsafeMutablePointer(&activeOrders)
-                orderIndex = idx
-            }
-
-            if let list = listToUpdate, let ordIdx = orderIndex, let itemIdx = list.pointee[ordIdx].items.firstIndex(where: { $0.id == itemId }) {
-                list.pointee[ordIdx].items[itemIdx].status = newStatus
-                list.pointee[ordIdx].items[itemIdx].lastUpdatedAt = Timestamp(date:Date())
-                list.pointee[ordIdx].lastUpdatedAt = Timestamp(date:Date())
-                // Trigger objectWillChange manually if direct array modification doesn't update UI sometimes
-                // self.objectWillChange.send()
+                if let itemIdx = activeOrders[idx].items.firstIndex(where: { $0.id == itemId }) {
+                    activeOrders[idx].items[itemIdx].status = newStatus
+                    activeOrders[idx].items[itemIdx].lastUpdatedAt = Timestamp(date:Date())
+                    activeOrders[idx].lastUpdatedAt = Timestamp(date:Date())
+                }
             }
             successMessage = "Item status updated to \(newStatus.capitalized)."
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
@@ -255,7 +293,7 @@ class OrdersViewModel: ObservableObject {
 
     // MARK: - Item Modifications
     func addItemToOrder(orderId: String, item: OrderItem) async {
-        guard var currentOrder = findOrderLocally(orderId: orderId) else {
+        guard let currentOrder = findOrderLocally(orderId: orderId) else {
             errorMessage = "Order not found to add item."
             return
         }
@@ -287,7 +325,7 @@ class OrdersViewModel: ObservableObject {
     }
 
     func updateOrderItemQuantity(orderId: String, itemId: String, newQuantity: Int) async {
-         guard var currentOrder = findOrderLocally(orderId: orderId),
+         guard let currentOrder = findOrderLocally(orderId: orderId),
                let itemIndex = currentOrder.items.firstIndex(where: {$0.id == itemId}) else {
              errorMessage = "Order or item not found for quantity update."
              return
@@ -316,7 +354,7 @@ class OrdersViewModel: ObservableObject {
     }
 
     func removeOrderItem(orderId: String, itemId: String, softDelete: Bool = true) async {
-        guard var currentOrder = findOrderLocally(orderId: orderId),
+        guard let currentOrder = findOrderLocally(orderId: orderId),
                let itemIndex = currentOrder.items.firstIndex(where: {$0.id == itemId}) else {
              errorMessage = "Order or item not found for removal."
              return
@@ -384,7 +422,7 @@ class OrdersViewModel: ObservableObject {
             )
             
             // Update local state
-            var printedOrder = order
+            let printedOrder = order
             printedOrder.status = AppConfig.OrderStatus.printed
             printedOrder.printedAt = Timestamp(date: Date()) // Set printed time
             printedOrder.lastUpdatedAt = Timestamp(date:Date())
@@ -432,7 +470,7 @@ class OrdersViewModel: ObservableObject {
         errorMessage = nil
         successMessage = nil
 
-        var orderToFinalize = order
+        let orderToFinalize = order
         orderToFinalize.paymentMethod = paymentMethod
         orderToFinalize.amountPaid = amountPaid
         orderToFinalize.discountPercentage = discountPercentage
@@ -454,8 +492,18 @@ class OrdersViewModel: ObservableObject {
             successMessage = "Order \(order.orderNumber) finalized and paid."
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
             
-            // TODO: Trigger table status update (make table available). This involves TableService/ViewModel.
-            // await TableService.shared.updateTableStatusForOrderCompletion(tableIds: orderToFinalize.tableIds, restaurantId: self.restaurantId)
+            // Update table statuses to .available
+            do {
+                try await tableService.updateMultipleTableStatuses(
+                    restaurantId: self.restaurantId,
+                    tableIds: orderToFinalize.tableIds,
+                    newStatus: .available,
+                    currentOrderId: nil
+                )
+            } catch {
+                print("Error updating table status after order finalization: \(error.localizedDescription)")
+                self.errorMessage = "Order finalized, but failed to free up tables: \(error.localizedDescription)"
+            }
 
         } catch {
             self.errorMessage = (error as? OrderServiceError ?? OrderServiceError.firestoreError(error)).localizedDescription
@@ -463,6 +511,45 @@ class OrdersViewModel: ObservableObject {
         isLoadingActiveOrders = false
     }
     
+    // MARK: - Order Cancellation
+    func cancelOrder(order: Order) async {
+        guard let orderId = order.id else {
+            self.errorMessage = "Order ID missing, cannot cancel."
+            return
+        }
+        isLoadingActiveOrders = true // Or a specific 'isCancelling' flag
+        errorMessage = nil
+        successMessage = nil
+
+        do {
+            // 1. Update order status to cancelled
+            try await orderService.updateOrderStatus(
+                restaurantId: self.restaurantId,
+                orderId: orderId,
+                newStatus: AppConfig.OrderStatus.cancelled
+            )
+            
+            // 2. Free up associated tables
+            try await tableService.updateMultipleTableStatuses(
+                restaurantId: self.restaurantId,
+                tableIds: order.tableIds,
+                newStatus: .available,
+                currentOrderId: nil
+            )
+            
+            // 3. Update local activeOrders list
+            updateLocalOrderStatus(orderId: orderId, newStatus: AppConfig.OrderStatus.cancelled, successful: true)
+            
+            successMessage = "Order \(order.orderNumber) has been cancelled and tables freed."
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
+
+        } catch {
+            self.errorMessage = (error as? OrderServiceError ?? OrderServiceError.firestoreError(error)).localizedDescription
+            print("Error cancelling order: \(error.localizedDescription)")
+        }
+        isLoadingActiveOrders = false
+    }
+
     // MARK: - Notifications
     private func triggerNewOrderNotification(_ order: Order?) {
         guard let order = order else { return }

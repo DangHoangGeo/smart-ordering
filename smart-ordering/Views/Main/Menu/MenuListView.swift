@@ -13,6 +13,7 @@ struct MenuListView: View {
     @StateObject private var menuViewModel = MenuViewModel() // Initialize here or pass from parent
     @EnvironmentObject var appSettings: AppSettings // For restaurantId if needed
     @EnvironmentObject var userViewModel: UserViewModel // For currentRestaurantId
+    @State private var hapticFeedbackLight = UIImpactFeedbackGenerator(style: .light)
 
     @State private var showingAddItemSheet = false
     @State private var itemToEdit: MenuItem? = nil // Used to trigger edit sheet
@@ -23,96 +24,136 @@ struct MenuListView: View {
                 ProgressView("Loading Menu...")
                     .padding()
             } else {
-                // Search Bar
-                SearchBar(text: $menuViewModel.searchText, placeholder: "Search menu items...")
-                    .padding(.horizontal)
-                    .padding(.top)
-
-                // Category Filter Picker (optional, could be tabs or a dropdown)
-                CategoryFilterView(categories: menuViewModel.categories,
-                                   selectedCategoryId: $menuViewModel.selectedCategoryIdFilter)
-                    .padding(.horizontal)
-                    .padding(.bottom, 5)
-                
-                // Menu Items List
-                List {
-                    ForEach(menuViewModel.itemsGroupedForDisplay, id: \.category.id) { section in
-                        Section(header: Text(section.category.name).font(.headline)) {
-                            if section.items.isEmpty {
-                                Text("No items in this category\(menuViewModel.searchText.isEmpty ? "" : " matching your search").")
-                                    .foregroundColor(.secondary)
-                                    .padding()
-                            } else {
-                                ForEach(section.items) { item in
-                                    MenuItemRow(item: item, onEdit: {
-                                        self.itemToEdit = item
-                                    }, onToggleAvailability: {
-                                        Task { await menuViewModel.toggleItemAvailability(item) }
-                                    })
-                                }
-                                .onDelete { indexSet in
-                                     deleteItems(at: indexSet, in: section.category)
-                                }
-                            }
-                        }
-                    }
-                     if menuViewModel.itemsGroupedForDisplay.isEmpty && !menuViewModel.isLoading {
-                         Text(menuViewModel.searchText.isEmpty ? "No menu items found. Add some!" : "No items match your search.")
-                             .foregroundColor(.secondary)
-                             .padding()
-                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                     }
-                }
-                .listStyle(InsetGroupedListStyle()) // Or PlainListStyle
-            }
-            
-            // Display error/success messages
-            if let message = menuViewModel.errorMessage ?? menuViewModel.successMessage {
-                 Text(message)
-                    .foregroundColor(menuViewModel.errorMessage != nil ? .red : .green)
-                    .padding()
-                    .transition(.opacity.animation(.easeIn))
-                    .onAppear { // Auto-dismiss message
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            if menuViewModel.errorMessage == message { menuViewModel.errorMessage = nil }
-                            if menuViewModel.successMessage == message { menuViewModel.successMessage = nil }
-                        }
-                    }
+                mainContent
             }
         }
         .navigationTitle("Menu Management")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    itemToEdit = nil // Ensure it's a new item
-                    showingAddItemSheet = true
-                } label: {
-                    Label("Add Item", systemImage: "plus.circle.fill")
-                }
+                addButton
             }
             ToolbarItem(placement: .navigationBarLeading) {
-                if menuViewModel.isLoading {
-                    ProgressView()
-                } else {
-                    EditButton() // For reordering or batch deleting (if implemented)
-                }
+                leadingToolbarContent
             }
         }
         .sheet(isPresented: $showingAddItemSheet) {
-            // When itemToEdit is nil, it's for adding a new item
             MenuItemEditView(viewModel: menuViewModel, menuItemToEdit: nil)
         }
         .sheet(item: $itemToEdit) { item in
-            // When itemToEdit is not nil, it's for editing an existing item
             MenuItemEditView(viewModel: menuViewModel, menuItemToEdit: item)
         }
-        .task { // Use .task for async operations on appear
-            if menuViewModel.menuItems.isEmpty { // Load only if not already loaded
-                // Set the correct restaurantId for the viewModel
+        .task {
+            if menuViewModel.menuItems.isEmpty {
                 if let currentRestaurantId = userViewModel.appUser?.currentRestaurantId {
-                     menuViewModel.restaurantId = currentRestaurantId
+                    menuViewModel.restaurantId = currentRestaurantId
                 }
                 await menuViewModel.loadInitialData()
+            }
+        }
+    }
+
+    private var mainContent: some View {
+        VStack {
+            SearchBar(text: $menuViewModel.searchText, placeholder: "Search menu items...")
+                .padding(.horizontal)
+                .padding(.top)
+                .accessibilityLabel("Search menu items by name, Japanese name, or code")
+
+            CategoryFilterView(categories: menuViewModel.categories,
+                            selectedCategoryId: $menuViewModel.selectedCategoryIdFilter)
+                .padding(.horizontal)
+                .padding(.bottom, 5)
+                .accessibilityLabel("Filter menu items by category")
+            
+            menuList
+            
+            if let message = menuViewModel.errorMessage ?? menuViewModel.successMessage {
+                messageView(message)
+            }
+        }
+    }
+
+    private var menuList: some View {
+        List {
+            ForEach(menuViewModel.itemsGroupedForDisplay, id: \.category.id) { section in
+                Section(header: Text(section.category.name).font(.headline)) {
+                    menuSectionContent(section)
+                }
+            }
+            if menuViewModel.itemsGroupedForDisplay.isEmpty && !menuViewModel.isLoading {
+                emptyStateView
+            }
+        }
+        .listStyle(InsetGroupedListStyle())
+    }
+
+    private func menuSectionContent(_ section: (category: MenuCategory, items: [MenuItem])) -> some View {
+        VStack {
+            if section.items.isEmpty {
+                Text("No items in this category\(menuViewModel.searchText.isEmpty ? "" : " matching your search").")
+                    .foregroundColor(.secondary)
+                    .padding()
+            } else {
+                ForEach(section.items, id: \.id) { item in
+                    MenuItemRow(item: item,
+                                quantity: 0, // Quantity is not used in this context
+                                onSelect: {
+                        self.itemToEdit = item
+                    })
+                    .contextMenu {
+                        Button {
+                            Task { await menuViewModel.toggleItemAvailability(item) }
+                        } label: {
+                            Label(item.isAvailable ? "Make Unavailable" : "Make Available", systemImage: item.isAvailable ? "xmark.circle" : "checkmark.circle")
+                        }
+                        Button(role: .destructive) {
+                            Task { await menuViewModel.deleteMenuItem(item) }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var emptyStateView: some View {
+        Text(menuViewModel.searchText.isEmpty ? "No menu items found. Add some!" : "No items match your search.")
+            .foregroundColor(.secondary)
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func messageView(_ message: String) -> some View {
+        Text(message)
+            .foregroundColor(menuViewModel.errorMessage != nil ? .red : .green)
+            .padding()
+            .transition(.opacity.animation(.easeIn))
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    if menuViewModel.errorMessage == message { menuViewModel.errorMessage = nil }
+                    if menuViewModel.successMessage == message { menuViewModel.successMessage = nil }
+                }
+            }
+    }
+
+    private var addButton: some View {
+        Button {
+            hapticFeedbackLight.impactOccurred()
+            itemToEdit = nil
+            showingAddItemSheet = true
+        } label: {
+            Label("Add Item", systemImage: "plus.circle.fill")
+        }
+        .accessibilityLabel("Add new menu item")
+    }
+
+    private var leadingToolbarContent: some View {
+        Group {
+            if menuViewModel.isLoading {
+                ProgressView()
+            } else {
+                EditButton()
             }
         }
     }
@@ -140,12 +181,14 @@ struct SearchBar: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.gray)
             TextField(placeholder, text: $text)
+                .accessibilityLabel(placeholder) // Label for the text field itself
                 .foregroundColor(.primary)
             if !text.isEmpty {
                 Button(action: { self.text = "" }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.gray)
                 }
+                .accessibilityLabel("Clear search text")
             }
         }
         .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
@@ -160,7 +203,7 @@ struct CategoryFilterView: View {
     @Binding var selectedCategoryId: String?
 
     var body: some View {
-        Picker("Filter by Category", selection: $selectedCategoryId) {
+        Picker("Filter menu items by category", selection: $selectedCategoryId) { // More descriptive label
             Text("All Categories").tag(String?.none) // Option for no filter
             ForEach(categories.sorted()) { category in
                 Text(category.name).tag(category.id as String?)
@@ -170,97 +213,6 @@ struct CategoryFilterView: View {
     }
 }
 
-
-// Placeholder for MenuItemRow - We'll detail this next
-struct MenuItemRow: View {
-    let item: MenuItem
-    var onEdit: () -> Void
-    var onToggleAvailability: () -> Void
-
-
-    var body: some View {
-        HStack {
-            if let imageUrlString = item.imageUrl, let url = URL(string: imageUrlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        ProgressView().frame(width: 60, height: 60)
-                    case .success(let image):
-                        image.resizable()
-                             .aspectRatio(contentMode: .fill)
-                             .frame(width: 60, height: 60)
-                             .clipShape(RoundedRectangle(cornerRadius: 8))
-                    case .failure:
-                        Image(systemName: "fork.knife.circle.fill") // Placeholder icon
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 60, height: 60)
-                            .foregroundColor(.gray)
-                            .background(Color.gray.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-            } else {
-                Image(systemName: "fork.knife.circle.fill") // Placeholder for no image
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 60, height: 60)
-                    .foregroundColor(.gray)
-                    .background(Color.gray.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-
-            VStack(alignment: .leading) {
-                Text(item.name)
-                    .font(.headline)
-                if let nameJP = item.nameJP, !nameJP.isEmpty {
-                    Text(nameJP)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                Text(String(format: "¥%.0f", item.price)) // Format price
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-            }
-
-            Spacer()
-
-            Image(systemName: item.isAvailable ? "eye.fill" : "eye.slash.fill")
-                .foregroundColor(item.isAvailable ? .green : .orange)
-                .onTapGesture {
-                    onToggleAvailability()
-                }
-        }
-        .contentShape(Rectangle()) // Make the whole row tappable for context menu or navigation
-        .onTapGesture { // For triggering edit on tap (alternative to swipe or button)
-             onEdit()
-        }
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                // Trigger delete in ViewModel
-                // Task { await viewModel.deleteMenuItem(item) } // If VM is accessible here
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-            Button {
-                onEdit()
-            } label: {
-                Label("Edit", systemImage: "pencil")
-            }
-            .tint(.blue)
-        }
-        .swipeActions(edge: .leading) {
-            Button {
-                onToggleAvailability()
-            } label: {
-                Label(item.isAvailable ? "Hide" : "Show", systemImage: item.isAvailable ? "eye.slash.fill" : "eye.fill")
-            }
-            .tint(item.isAvailable ? .orange : .green)
-        }
-    }
-}
 
 // Placeholder for MenuItemEditView - We'll detail this next
 struct MenuItemEditView: View {
@@ -284,55 +236,72 @@ struct MenuItemEditView: View {
     @State private var existingImageUrl: String?
 
     @State private var showImagePicker = false
+    @State private var showingDeleteConfirm = false // For delete confirmation
+    @State private var hapticFeedbackLight = UIImpactFeedbackGenerator(style: .light)
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
+
 
     var isEditing: Bool { menuItemToEdit != nil }
 
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text(isEditing ? "Edit Menu Item" : "Add New Menu Item")) {
+                Section(header: Text("Image")) { // Section 1: Image
                     imageSelectionSection
-                    
+                }
+
+                Section(header: Text("Core Details")) { // Section 2: Core Details
                     TextField("Name (e.g., Pho Bo)", text: $name)
+                        .accessibilityLabel("Menu item name")
                     TextField("Japanese Name (optional)", text: $nameJP)
-                    TextField("Price (e.g., 12.50)", text: $price)
-                        .keyboardType(.decimalPad)
-                    TextField("Item Code (optional, e.g., F001)", text: $code)
-                    
+                        .accessibilityLabel("Menu item Japanese name")
+                    TextField("Price (e.g., 1200)", text: $price)
+                        .keyboardType(.numberPad)
+                        .accessibilityLabel("Menu item price")
                     Picker("Category", selection: $categoryId) {
                         ForEach(viewModel.categories.sorted()) { category in
                             Text(category.name).tag(category.id ?? "")
                         }
                     }
+                    .accessibilityLabel(viewModel.categories.isEmpty ? "No categories available. Please add a category first." : "Select menu item category. Currently selected: \(viewModel.categories.first(where: {$0.id == categoryId})?.name ?? "None")")
                     if viewModel.categories.isEmpty && categoryId.isEmpty {
                         Text("No categories available. Please add a category first.")
                             .foregroundColor(.orange)
                     }
-                    
+                    TextField("Item Code (optional, e.g., F001)", text: $code)
+                        .autocapitalization(.allCharacters)
+                        .accessibilityLabel("Menu item code")
+                }
+
+                Section(header: Text("Additional Information")) { // Section 3: Additional Info
+                    TextEditorWithPlaceholder(text: $descriptionText, placeholder: "Description (e.g., ingredients, allergens)")
+                        .frame(minHeight: 100)
+                        .accessibilityLabel("Menu item description")
                     TextField("Display Order in Category", text: $displayOrder)
                          .keyboardType(.numberPad)
+                         .accessibilityLabel("Menu item display order in category")
+                }
 
-                    TextEditorWithPlaceholder(text: $descriptionText, placeholder: "Description (optional)")
-                        .frame(height: 100)
-                    
+                Section(header: Text("Availability")) { // Section 4: Availability
                     Toggle("Available for Ordering", isOn: $isAvailable)
+                        .accessibilityLabel("Toggle item availability for ordering")
                 }
                 
-                Section {
+                Section { // Section 5: Actions
                     Button(isEditing ? "Save Changes" : "Add Item") {
+                        hapticFeedbackMedium.impactOccurred()
                         saveMenuItem()
                     }
                     .disabled(name.isEmpty || price.isEmpty || categoryId.isEmpty || viewModel.isLoading)
+                    .accessibilityLabel(isEditing ? "Save changes to menu item" : "Add new menu item")
                     
                     if isEditing {
                         Button("Delete Item", role: .destructive) {
-                            // Add confirmation alert before deleting
-                            if let item = menuItemToEdit {
-                                Task { await viewModel.deleteMenuItem(item) }
-                                dismiss()
-                            }
+                            hapticFeedbackLight.impactOccurred()
+                            showingDeleteConfirm = true
                         }
                         .disabled(viewModel.isLoading)
+                        .accessibilityLabel("Delete menu item")
                     }
                 }
                 
@@ -345,18 +314,34 @@ struct MenuItemEditView: View {
                 }
             }
             .navigationTitle(isEditing ? "Edit Item" : "New Item")
-            .navigationBarItems(leading: Button("Cancel") { dismiss() })
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .accessibilityLabel("Cancel editing menu item")
+                }
+            }
             .onAppear(perform: populateFormForEditing)
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(selectedImage: $selectedImage)
             }
-            .onChange(of: selectedImage) { newImage in
+            .onChange(of: selectedImage) { _, newImage in
                  guard let uiImage = newImage else {
                      imageDataForUpload = nil
                      return
                  }
-                 // Compress and convert UIImage to Data
-                 imageDataForUpload = uiImage.jpegData(compressionQuality: 0.7) // Adjust quality
+                 imageDataForUpload = uiImage.jpegData(compressionQuality: 0.7)
+            }
+            .alert("Confirm Delete", isPresented: $showingDeleteConfirm) {
+                Button("Delete Item", role: .destructive) {
+                    hapticFeedbackMedium.impactOccurred()
+                    if let item = menuItemToEdit {
+                        Task { await viewModel.deleteMenuItem(item) }
+                        dismiss()
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Are you sure you want to delete the item \"\(name)\"? This action cannot be undone.")
             }
         }
     }
@@ -368,32 +353,39 @@ struct MenuItemEditView: View {
                 if let imageData = imageDataForUpload, let uiImage = UIImage(data: imageData) {
                     Image(uiImage: uiImage)
                         .resizable().scaledToFit().frame(height: 100).cornerRadius(8)
+                        .accessibilityLabel("Newly selected image preview")
                 } else if let imageUrlString = existingImageUrl, let url = URL(string: imageUrlString) {
                     AsyncImage(url: url) { phase in
                         if let image = phase.image {
                             image.resizable().scaledToFit().frame(height: 100).cornerRadius(8)
+                                .accessibilityLabel("Current item image")
                         } else if phase.error != nil {
                             Image(systemName: "photo.fill").frame(height: 100).foregroundColor(.gray)
+                                .accessibilityLabel("Error loading item image")
                         } else {
                             ProgressView().frame(height: 100)
+                                .accessibilityLabel("Loading item image")
                         }
                     }
                 } else {
                     Image(systemName: "photo.on.rectangle.angled").resizable().scaledToFit().frame(height: 60).foregroundColor(.gray)
+                        .accessibilityLabel("No image placeholder")
                 }
                 Spacer()
                 Button(imageDataForUpload != nil || existingImageUrl != nil ? "Change Image" : "Add Image") {
                     showImagePicker = true
                 }
+                .accessibilityLabel(imageDataForUpload != nil || existingImageUrl != nil ? "Change menu item image" : "Add menu item image")
             }
             if imageDataForUpload != nil || existingImageUrl != nil {
                  Button("Remove Image", role: .destructive) {
                      selectedImage = nil
                      imageDataForUpload = nil
-                     existingImageUrl = nil // Signal that the image should be removed on save
+                     existingImageUrl = nil
                  }
                  .font(.caption)
                  .padding(.top, 2)
+                 .accessibilityLabel("Remove menu item image")
             }
         }
     }

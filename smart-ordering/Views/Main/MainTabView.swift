@@ -123,12 +123,3 @@ struct SettingsView: View {
     }
 }
 
-
-// Views/Main/Tables/TablesListView.swift
-struct TablesListView: View {
-    var body: some View {
-        Text("Tables List - Coming Soon!")
-        // TODO: Integrate TablesViewModel and display table layout/status
-        // Allow managing tables.
-    }
-}

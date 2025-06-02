@@ -51,7 +51,7 @@ class PrintFormatter {
         let itemsGrouped = Dictionary(grouping: order.items.filter { $0.status != AppConfig.OrderStatus.cancelled && $0.status != AppConfig.OrderStatus.removed }, by: { $0.categoryId ?? "Uncategorized" })
         
         // You might want to fetch category names here if needed, or rely on `item.name`
-        for (categoryId, items) in itemsGrouped {
+        for (_, items) in itemsGrouped {
             // Optional: Print category name
             // if let category = menuViewModel.categories.first(where: {$0.id == categoryId}) {
             //    if let catNameData = stringToShiftJISData("\n[\(category.name)]\n") { command.append(catNameData) }

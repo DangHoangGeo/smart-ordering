@@ -152,7 +152,7 @@ class OrderService {
 
     // Create a new order
     func createOrder(_ order: Order) async throws -> String {
-        var orderToSave = order
+        let orderToSave = order
         orderToSave.orderedAt = Timestamp(date: Date())
         orderToSave.lastUpdatedAt = Timestamp(date: Date())
         
@@ -171,7 +171,7 @@ class OrderService {
     
     func updateOrder(_ order: Order) async throws {
         guard let orderId = order.id else { throw OrderServiceError.orderNotFound }
-        var orderToSave = order // Make a mutable copy
+        let orderToSave = order // Make a mutable copy
         orderToSave.lastUpdatedAt = Timestamp(date: Date()) // Ensure lastUpdatedAt is current
         
         do {
@@ -197,7 +197,7 @@ class OrderService {
                 return nil
             }
             
-            guard var order = try? orderSnapshot.data(as: Order.self) else {
+            guard let order = try? orderSnapshot.data(as: Order.self) else {
                 let error = NSError(domain: "OrderService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Order not found"])
                 errorPointer?.pointee = error
                 return nil
@@ -236,7 +236,7 @@ class OrderService {
                 return nil
             }
             
-            guard var order = try? orderSnapshot.data(as: Order.self) else {
+            guard let order = try? orderSnapshot.data(as: Order.self) else {
                 let error = NSError(domain: "OrderService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Order not found"])
                 errorPointer?.pointee = error
                 return nil
@@ -278,7 +278,7 @@ class OrderService {
                 return nil
             }
             
-            guard var order = try? orderSnapshot.data(as: Order.self) else {
+            guard let order = try? orderSnapshot.data(as: Order.self) else {
                 let error = NSError(domain: "OrderService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Order not found"])
                 errorPointer?.pointee = error
                 return nil
@@ -311,7 +311,7 @@ class OrderService {
                 return nil
             }
             
-            guard var order = try? orderSnapshot.data(as: Order.self) else {
+            guard let order = try? orderSnapshot.data(as: Order.self) else {
                 let error = NSError(domain: "OrderService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Order not found"])
                 errorPointer?.pointee = error
                 return nil

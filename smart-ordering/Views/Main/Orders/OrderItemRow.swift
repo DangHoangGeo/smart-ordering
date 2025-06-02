@@ -10,102 +10,210 @@ import SwiftUI
 struct OrderItemRow: View {
     @Binding var item: OrderItem
     let isOrderEditable: Bool
-    let ordersViewModel: OrdersViewModel // To call update functions
-    let order: Order // Pass the whole order for context for updates
-    // let orderRowHelper: OrderRow // No longer needed if statusColor is local or static
-
-    var onEditQuantity: () -> Void
+    let ordersViewModel: OrdersViewModel
+    let order: Order
+    let menuItemImageUrl: String?
     
-    @State private var showCancelConfirm = false // For confirmation alert
-    @State private var showRemoveConfirm = false // For confirmation alert
+    var onEditQuantity: () -> Void
+    var onEditNotes: () -> Void
+    
+    @State private var showCancelConfirm = false
+    @State private var showRemoveConfirm = false
+    @State private var hapticFeedback = UIImpactFeedbackGenerator(style: .medium)
 
-
+    private let imageSize: CGFloat = 60
+    
     var body: some View {
-        VStack(alignment: .leading) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(item.name)
-                        .font(.headline)
-                        .strikethrough(item.status == AppConfig.OrderStatus.removed || item.status == AppConfig.OrderStatus.cancelled, color: .red)
-                    if let nameJP = item.nameJP, !nameJP.isEmpty {
-                        Text(nameJP).font(.caption).foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                // Item Image
+                Group {
+                    if let imageUrl = menuItemImageUrl, let url = URL(string: imageUrl) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .empty:
+                                ProgressView()
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            case .failure:
+                                Image(systemName: "fork.knife.circle.fill")
+                                    .symbolRenderingMode(.hierarchical)
+                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 30))
+                            @unknown default:
+                                EmptyView()
+                            }
+                        }
+                    } else {
+                        Image(systemName: "fork.knife.circle.fill")
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.secondary)
+                            .font(.system(size: 30))
                     }
                 }
-                Spacer()
-                Text("x\(item.quantity)")
-                    .font(.headline)
-                    .padding(.horizontal, 6)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(4)
-                    .onTapGesture { if isOrderEditable { onEditQuantity() } }
-                Text(formattedPrice(item.totalPrice))
-                    .font(.subheadline.weight(.medium))
-            }
-            if let notes = item.notes, !notes.isEmpty {
-                Text("Notes: \(notes)").font(.caption).italic().foregroundColor(.gray)
-            }
-
-            if isOrderEditable {
-                HStack {
-                    Picker("Status", selection: $item.status) {
-                        Text("Pending").tag(AppConfig.OrderStatus.pending)
-                        Text("Preparing").tag(AppConfig.OrderStatus.preparing)
-                        Text("Ready").tag(AppConfig.OrderStatus.readyForDelivery)
-                        Text("Delivered").tag(AppConfig.OrderStatus.delivered)
-                        Text("Cancel Item").tag(AppConfig.OrderStatus.cancelled)
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .onChange(of: item.status) { oldStatus, newStatus in
-                        if newStatus == AppConfig.OrderStatus.cancelled && oldStatus != AppConfig.OrderStatus.cancelled {
-                            item.status = oldStatus // Revert, show confirmation
-                            showCancelConfirm = true
-                        } else if newStatus != AppConfig.OrderStatus.removed && newStatus != AppConfig.OrderStatus.cancelled {
-                            Task {
-                                await ordersViewModel.updateOrderItemStatus(order: order, itemId: item.id, newStatus: newStatus)
+                .frame(width: imageSize, height: imageSize)
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    // Item Name and Price
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name)
+                                .font(.headline)
+                                .strikethrough(item.status == AppConfig.OrderStatus.removed || 
+                                             item.status == AppConfig.OrderStatus.cancelled, 
+                                             color: .red)
+                            if let nameJP = item.nameJP {
+                                Text(nameJP)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
                             }
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("\(item.quantity)×")
+                                .font(.system(.headline, design: .rounded))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color(.systemGray6))
+                                .clipShape(Capsule())
+                                .onTapGesture {
+                                    if isOrderEditable {
+                                        hapticFeedback.impactOccurred()
+                                        onEditQuantity()
+                                    }
+                                }
+                            
+                            Text(formattedPrice(item.totalPrice))
+                                .font(.headline)
+                        }
+                    }
+                    
+                    // Notes and Status
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let notes = item.notes, !notes.isEmpty {
+                            HStack {
+                                Image(systemName: "text.bubble")
+                                    .foregroundColor(.secondary)
+                                Text(notes)
+                                    .font(.callout)
+                                    .foregroundColor(.secondary)
+                                    .italic()
+                                if isOrderEditable {
+                                    Button(action: {
+                                        hapticFeedback.impactOccurred(intensity: 0.5)
+                                        onEditNotes()
+                                    }) {
+                                        Image(systemName: "pencil.circle")
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        
+                        if isOrderEditable {
+                            Picker("Status", selection: $item.status) {
+                                Text("Pending").tag(AppConfig.OrderStatus.pending)
+                                Text("Preparing").tag(AppConfig.OrderStatus.preparing)
+                                Text("Ready").tag(AppConfig.OrderStatus.readyForDelivery)
+                                Text("Delivered").tag(AppConfig.OrderStatus.delivered)
+                                Text("Cancel").tag(AppConfig.OrderStatus.cancelled)
+                            }
+                            .pickerStyle(SegmentedPickerStyle())
+                            .onChange(of: item.status) { oldStatus, newStatus in
+                                if newStatus == AppConfig.OrderStatus.cancelled && oldStatus != AppConfig.OrderStatus.cancelled {
+                                    item.status = oldStatus
+                                    hapticFeedback.impactOccurred()
+                                    showCancelConfirm = true
+                                } else if newStatus != AppConfig.OrderStatus.removed && newStatus != AppConfig.OrderStatus.cancelled {
+                                    hapticFeedback.impactOccurred(intensity: 0.5)
+                                    Task {
+                                        await ordersViewModel.updateOrderItemStatus(order: order, itemId: item.id, newStatus: newStatus)
+                                    }
+                                }
+                            }
+                        } else {
+                            HStack {
+                                Circle()
+                                    .fill(statusColorForItem(item.status))
+                                    .frame(width: 8, height: 8)
+                                Text(item.status.replacingOccurrences(of: "_", with: " ").capitalized)
+                                    .font(.callout)
+                                    .foregroundColor(statusColorForItem(item.status))
+                            }
+                            .padding(.vertical, 4)
                         }
                     }
                 }
-                .padding(.top, 4)
-            } else {
-                Text("Status: \(item.status.replacingOccurrences(of: "_", with: " ").capitalized)")
-                    .font(.caption)
-                    .foregroundColor(statusColorForItem(item.status)) // Local status color
             }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+            )
         }
-        .padding(.vertical, 6)
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if isOrderEditable {
                 Button(role: .destructive) {
+                    hapticFeedback.impactOccurred()
                     showRemoveConfirm = true
                 } label: { Label("Remove", systemImage: "trash") }
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
              if isOrderEditable {
-                Button { onEditQuantity() } label: { Label("Edit Qty", systemImage: "square.and.pencil") }.tint(.blue)
+                Button {
+                    hapticFeedback.impactOccurred(intensity: 0.5)
+                    onEditQuantity()
+                } label: { Label("Edit Qty", systemImage: "square.and.pencil") }
+                .tint(.blue)
+                
+                Button {
+                    hapticFeedback.impactOccurred(intensity: 0.5)
+                    onEditNotes()
+                } label: { Label("Notes", systemImage: "text.bubble") }
+                .tint(.orange)
              }
         }
         .alert("Confirm Cancel Item", isPresented: $showCancelConfirm) {
             Button("Cancel Item", role: .destructive) {
-                Task { await ordersViewModel.updateOrderItemStatus(order: order, itemId: item.id, newStatus: AppConfig.OrderStatus.cancelled) }
+                hapticFeedback.impactOccurred()
+                Task {
+                    await ordersViewModel.updateOrderItemStatus(order: order, itemId: item.id, newStatus: AppConfig.OrderStatus.cancelled)
+                }
             }
             Button("Keep", role: .cancel) {}
-        } message: { Text("Are you sure you want to cancel this item: \(item.name)?") }
+        } message: {
+            Text("Are you sure you want to cancel this item: \(item.name)?")
+        }
         .alert("Confirm Remove Item", isPresented: $showRemoveConfirm) {
             Button("Remove Item", role: .destructive) {
-                Task { await ordersViewModel.removeOrderItem(orderId: order.id!, itemId: item.id, softDelete: true) }
+                hapticFeedback.impactOccurred()
+                Task {
+                    await ordersViewModel.removeOrderItem(orderId: order.id!, itemId: item.id, softDelete: true)
+                }
             }
             Button("Keep", role: .cancel) {}
-        } message: { Text("Are you sure you want to remove this item: \(item.name)? It will be marked as removed.") }
+        } message: {
+            Text("Are you sure you want to remove this item: \(item.name)? It will be marked as removed.")
+        }
     }
     
     private func formattedPrice(_ price: Double) -> String {
-        let formatter = NumberFormatter(); formatter.numberStyle = .currency; formatter.currencySymbol = "¥"; formatter.maximumFractionDigits = 0
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencySymbol = "¥"
+        formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: price)) ?? "¥\(Int(price))"
     }
 
-    // Local status color helper for items, can be different from overall order status colors
     private func statusColorForItem(_ status: String) -> Color {
         switch status {
         case AppConfig.OrderStatus.pending: return .gray

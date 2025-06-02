@@ -1,19 +1,17 @@
-// Views/Main/Orders/AddItemsSheet.swift
 import SwiftUI
 
-struct AddItemsSheet: View {
+struct AddItemsToOrderSheet: View {
     @Environment(\.dismiss) var dismiss
+    @ObservedObject var order: Order
     @StateObject private var menuViewModel: MenuViewModel
     @State private var searchText = ""
     @State private var selectedCategory: MenuCategory?
     @State private var selectedItems: [MenuItem: Int] = [:]
     @State private var hapticFeedback = UIImpactFeedbackGenerator(style: .light)
     
-    let onComplete: ([MenuItem: Int]) -> Void
-    
-    init(restaurantId: String, onComplete: @escaping ([MenuItem: Int]) -> Void) {
-        self._menuViewModel = StateObject(wrappedValue: MenuViewModel(restaurantId: restaurantId))
-        self.onComplete = onComplete
+    init(order: Order) {
+        self.order = order
+        self._menuViewModel = StateObject(wrappedValue: MenuViewModel(restaurantId: order.restaurantId))
     }
     
     private var filteredItems: [MenuItem] {
@@ -138,11 +136,7 @@ struct AddItemsSheet: View {
                             .padding(.horizontal)
                         }
                         
-                        Button(action: {
-                            hapticFeedback.impactOccurred()
-                            onComplete(selectedItems)
-                            dismiss()
-                        }) {
+                        Button(action: addItemsToOrder) {
                             Text("Add \(selectedItems.values.reduce(0, +)) Items")
                                 .font(.headline)
                                 .frame(maxWidth: .infinity)
@@ -157,7 +151,7 @@ struct AddItemsSheet: View {
                     .background(AppConfig.Colors.background)
                 }
             }
-            .navigationTitle("Add Items")
+            .navigationTitle("Add Items to Order")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -170,8 +164,25 @@ struct AddItemsSheet: View {
             hapticFeedback.prepare()
         }
     }
+    
+    private func addItemsToOrder() {
+        for (item, quantity) in selectedItems {
+            let menuItem = MenuItem(
+                id: item.id,
+                restaurantId: item.restaurantId,
+                name: item.name,
+                nameJP: item.nameJP,
+                namePrint: item.namePrint,
+                price: item.price,
+                categoryId: item.categoryId
+            )
+            let orderItem = OrderItem(
+                menuItem: menuItem,
+                quantity: quantity
+            )
+            order.items.append(orderItem)
+        }
+        dismiss()
+    }
 }
 
-#Preview {
-    AddItemsSheet(restaurantId: "test") { _ in }
-}

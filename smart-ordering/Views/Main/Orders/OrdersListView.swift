@@ -16,6 +16,9 @@ struct OrdersListView: View {
     @State private var toastType: ToastType = .info // Renamed from OrdersListView.ToastType for clarity
     enum ToastType { case info, success, error }
 
+    // Haptic feedback generator
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
+
     var body: some View {
         List {
             newOrdersSection
@@ -28,26 +31,31 @@ struct OrdersListView: View {
                 if ordersViewModel.isLoadingNewOrders || ordersViewModel.isLoadingActiveOrders || ordersViewModel.isPrinting {
                     ProgressView().frame(width: 20, height: 20)
                 } else {
-                    Button { Task { await ordersViewModel.refreshAllData() } } label: {
+                    Button {
+                        hapticFeedbackMedium.impactOccurred()
+                        Task { await ordersViewModel.refreshAllData() }
+                    } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
+                    .accessibilityLabel("Refresh orders list")
                 }
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                Button { showingCreateOrderSheet = true } label: {
+                Button {
+                    hapticFeedbackMedium.impactOccurred()
+                    showingCreateOrderSheet = true
+                } label: {
                     Label("New Order", systemImage: "plus.circle.fill")
                 }
+                .accessibilityLabel("Create new order")
             }
         }
         .sheet(isPresented: $showingCreateOrderSheet, onDismiss: {
             // This onDismiss is for the CreateManualOrderView sheet
         }) {
+            // Changed: Remove binding argument and use closure initializer
             CreateManualOrderView { createdOrder in
-                // This closure is called when CreateManualOrderView successfully creates an order
                 self.orderForAddingItems = createdOrder
-                // Important: Dismiss the first sheet *before* presenting the second
-                // This often requires a slight delay or managing sheet presentation more carefully.
-                // For now, setting the state variable will trigger the second sheet.
                 self.showingAddItemsToNewOrderSheet = true
             }
             .environmentObject(ordersViewModel)
@@ -59,23 +67,18 @@ struct OrdersListView: View {
             // Optionally, refresh active orders here if items were added successfully
             // Task { await ordersViewModel.fetchActiveOrders() }
         }) {
-            // This sheet is for adding items to the order *just created* manually
             if let order = orderForAddingItems {
-                AddItemsToOrderSheet(
-                    // Pass a binding to the order if AddItemsToOrderSheet needs to modify order-level props
-                    // If it only adds items via ViewModel, a non-binding `let order: Order` is fine.
-                    // The current AddItemsToOrderSheet uses `@Binding var order`, so we pass it.
-                    // However, the actual modifications happen via ordersViewModel.
-                    order: .constant(order), // Use .constant if order details aren't changed directly by this sheet
-                    ordersViewModel: ordersViewModel,
-                    // Create a new MenuViewModel instance specifically for this sheet
-                    menuViewModel: MenuViewModel(restaurantId: ordersViewModel.restaurantId)
-                )
+                AddItemsToOrderSheet(order: order)
+                    .environmentObject(ordersViewModel)
             } else {
-                // Fallback view, though this state should ideally not be reached
-                // if `orderForAddingItems` is correctly set before `showingAddItemsToNewOrderSheet` becomes true.
                 Text("Error: Order context lost. Please try creating the order again.")
                     .padding()
+            }
+        }
+        // Added: when orderForAddingItems is set, trigger the addition sheet
+        .onChange(of: orderForAddingItems) {
+            if orderForAddingItems != nil {
+            showingAddItemsToNewOrderSheet = true
             }
         }
         .overlay(
@@ -111,7 +114,11 @@ struct OrdersListView: View {
     }
 
     private var newOrdersSection: some View {
-        Section(header: Text("New Web Orders (\(ordersViewModel.newOrders.count))").font(.headline)) {
+        Section(header: HStack {
+            Text("New Web Orders")
+            BadgeView(count: ordersViewModel.newOrders.count)
+        }
+        .font(.headline)) {
             if ordersViewModel.isLoadingNewOrders && ordersViewModel.newOrders.isEmpty {
                 ProgressView("Loading new orders...").centeredInList()
             } else if ordersViewModel.newOrders.isEmpty {
@@ -119,7 +126,10 @@ struct OrdersListView: View {
                     .foregroundColor(.secondary).padding(.vertical).centeredInList()
             } else {
                 ForEach(ordersViewModel.newOrders) { order in
-                    NavigationLink(destination: OrderDetailView(ordersViewModel: ordersViewModel, order: order)) {
+                    NavigationLink {
+                        // Changed: Pass ordersViewModel before order
+                        OrderDetailView(ordersViewModel: ordersViewModel, order: order)
+                    } label: {
                         OrderRow(order: order, isNew: true)
                     }
                 }
@@ -132,12 +142,15 @@ struct OrdersListView: View {
             if ordersViewModel.isLoadingActiveOrders && ordersViewModel.activeOrders.isEmpty {
                 ProgressView("Loading active orders...").centeredInList()
             } else if ordersViewModel.activeOrders.isEmpty {
-                Text("No active orders.")
+                Text("No active orders. Tap the '+' button above to create one!")
                     .foregroundColor(.secondary).padding(.vertical).centeredInList()
             } else {
                 ForEach(ordersViewModel.activeOrders) { order in
-                    NavigationLink(destination: OrderDetailView(ordersViewModel: ordersViewModel, order: order)) {
-                        OrderRow(order: order)
+                    NavigationLink {
+                        // Changed: Pass ordersViewModel before order
+                        OrderDetailView(ordersViewModel: ordersViewModel, order: order)
+                    } label: {
+                        OrderRow(order: order, isNew: false)
                     }
                 }
             }
@@ -163,6 +176,30 @@ struct OrdersListView: View {
                 }
         } else {
             EmptyView()
+        }
+    }
+}
+
+// MARK: - BadgeView
+// (Can be in its own file, but included here for the subtask)
+
+struct BadgeView: View {
+    let count: Int
+    var backgroundColor: Color = .red
+    var textColor: Color = .white
+
+    var body: some View {
+        if count > 0 {
+            Text("\(count)")
+                .font(.caption.bold())
+                .accessibilityLabel("\(count) new items") // Example label
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(backgroundColor)
+                .foregroundColor(textColor)
+                .clipShape(Capsule())
+        } else {
+            EmptyView() // Don't show the badge if count is 0
         }
     }
 }

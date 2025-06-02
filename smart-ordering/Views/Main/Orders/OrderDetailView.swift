@@ -11,6 +11,13 @@ struct OrderDetailView: View {
     @State private var showingAddItemSheet = false
     @State private var showingPaymentSheet = false
     @State private var itemToEditQuantity: OrderItem? = nil
+    @State private var itemToEditNote: OrderItem? = nil // For note editing sheet
+    @State private var showingCancelConfirmation = false // Added for cancel order confirmation
+
+    // Haptic feedback generator
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
+    @State private var hapticFeedbackLight = UIImpactFeedbackGenerator(style: .light) // For non-critical actions
+    @State private var hapticFeedback = UIImpactFeedbackGenerator(style: .medium)
 
     // For toast messages within this view
     @State private var showDetailMessageToast = false
@@ -23,7 +30,7 @@ struct OrderDetailView: View {
     init(ordersViewModel: OrdersViewModel, order: Order) {
         self.ordersViewModel = ordersViewModel
         self._order = State(initialValue: order)
-        self.orderRowDisplayHelper = OrderRow(order: order) // For overall order status color
+        self.orderRowDisplayHelper = OrderRow(order: order, isNew: false) // For overall order status color
     }
     
     private var isOrderEditable: Bool {
@@ -44,176 +51,398 @@ struct OrderDetailView: View {
     }
 
     var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                if geometry.size.width > 700 { // iPad landscape-like width
+                    HStack(alignment: .top, spacing: 20) {
+                        // Left Column
+                        ScrollView { // Make left column scrollable if content exceeds height
+                            VStack(alignment: .leading, spacing: 16) {
+                                headerSection
+                                summarySection
+                                Spacer() // Pushes content up if not enough to fill
+                            }
+                            .padding([.leading, .trailing, .top]) // Add padding for scrollview content
+                        }
+                        .frame(width: geometry.size.width * 0.4)
+                        .background(Color(UIColor.systemGroupedBackground))
+
+                        // Right Column (Items & Actions)
+                        ScrollView { // Make item list scrollable independently
+                            VStack(alignment: .leading, spacing: 16) {
+                                itemsSection
+                            }
+                            .padding([.trailing, .leading, .top])
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                } else { // Single column for smaller screens or portrait
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            headerSection
+                            summarySection
+                            itemsSection
+                            Spacer(minLength: 100)
+                        }
+                        .padding()
+                    }
+                }
+                
+                if isOrderEditable {
+                    VStack {
+                        Spacer()
+                        if ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .background(Color(.systemBackground))
+                        } else {
+                            actionBarButtons
+                        }
+                    }
+                    .padding()
+                    .background(
+                        Color(.systemBackground)
+                            .shadow(color: .black.opacity(0.1), radius: 5, y: -2)
+                    )
+                    .ignoresSafeArea(edges: .bottom)
+                }
+            }
+        }
+        .navigationTitle("Order #\(order.orderNumber)")
+        .toolbar { toolbarContent }
+        .sheet(isPresented: $showingAddItemSheet) {
+            AddItemsToOrderSheet(order: order)
+        }
+        .sheet(item: $itemToEditQuantity) { itemToEdit in
+             EditOrderItemQuantitySheet(item: itemToEdit, order: $order, ordersViewModel: ordersViewModel)
+        }
+        .sheet(item: $itemToEditNote) { itemNoteToEdit in
+            if let index = order.items.firstIndex(where: { $0.id == itemNoteToEdit.id }) {
+                ItemNoteEditSheetView(item: $order.items[index], ordersViewModel: ordersViewModel, orderId: order.id!)
+            } else {
+                Text("Error: Item not found for note editing.")
+            }
+        }
+        .sheet(isPresented: $showingPaymentSheet) {
+            PaymentSheetView(order: $order, ordersViewModel: ordersViewModel)
+        }
+        .overlay(toastOverlay)
+        .onReceive(ordersViewModel.$errorMessage) { message in
+            if let msg = message, !msg.isEmpty {
+                self.detailToastMessage = msg
+                self.detailToastType = .error
+                self.showDetailMessageToast = true
+                DispatchQueue.main.async { ordersViewModel.errorMessage = nil }
+            }
+        }
+        .onReceive(ordersViewModel.$successMessage) { message in
+            if let msg = message, !msg.isEmpty {
+                self.detailToastMessage = msg
+                self.detailToastType = .success
+                self.showDetailMessageToast = true
+                DispatchQueue.main.async { ordersViewModel.successMessage = nil }
+            }
+        }
+        /**
+        .onChange(of: ordersViewModel.activeOrders) { _, newActiveOrders in
+            if let updatedOrder = newActiveOrders.first(where: { $0.id == self.order.id }) {
+                self.order = updatedOrder
+            }
+        }
+        .onChange(of: ordersViewModel.newOrders) { _, newNewOrders in
+            if let updatedOrder = newNewOrders.first(where: { $0.id == self.order.id }) {
+                self.order = updatedOrder
+            }
+        }*/
+        .alert("Cancel Order", isPresented: $showingCancelConfirmation) {
+            Button("Yes, Cancel", role: .destructive) {
+                hapticFeedbackMedium.impactOccurred()
+                Task {
+                    await ordersViewModel.cancelOrder(order: self.order)
+                    if ordersViewModel.errorMessage == nil {
+                        dismiss()
+                    }
+                }
+            }
+            Button("No", role: .cancel) { }
+        } message: {
+            Text("Are you sure you want to cancel order #\(order.orderNumber)? This action cannot be undone and will free up the tables.")
+        }
+        .task {
+            if menuViewModel.menuItems.isEmpty {
+                menuViewModel.restaurantId = ordersViewModel.restaurantId 
+                await menuViewModel.loadInitialData()
+            }
+        }
+    }
+
+    private var mainScrollView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerSection
                 summarySection
                 itemsSection
-                Spacer()
+                Spacer(minLength: 100)
             }
             .padding()
         }
-        .navigationTitle("Order #\(order.orderNumber)")
-        .toolbar {
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                if isOrderEditable && !ordersViewModel.isPrinting && !ordersViewModel.isLoadingActiveOrders {
-                    Button { showingAddItemSheet = true } label: { Label("Add Item", systemImage: "plus.circle.fill") }
+    }
+
+    private var stickyActionBar: some View {
+        VStack {
+            Spacer()
+            if isOrderEditable {
+                HStack(spacing: 12) {
+                    if ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .background(Color(.systemBackground))
+                    } else {
+                        actionBarButtons
+                    }
                 }
+                .padding()
+                .background(
+                    Color(.systemBackground)
+                        .shadow(color: .black.opacity(0.1), radius: 5, y: -2)
+                )
             }
         }
-        .sheet(isPresented: $showingAddItemSheet) {
-            AddItemsToOrderSheet(order: $order, ordersViewModel: ordersViewModel, menuViewModel: menuViewModel)
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    private var actionBarButtons: some View {
+        Group {
+            Button(action: { showingAddItemSheet = true }) {
+                Label("Add", systemImage: "plus.circle.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            
+            Button {
+                Task { await ordersViewModel.printOrderToKitchen(order: order) }
+            } label: {
+                Label("Print", systemImage: "printer.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+            .disabled(order.status == AppConfig.OrderStatus.printed || 
+                    order.items.filter { $0.status != AppConfig.OrderStatus.cancelled && 
+                                       $0.status != AppConfig.OrderStatus.removed }.isEmpty)
+            
+            if isOrderPayable {
+                Button(action: { showingPaymentSheet = true }) {
+                    Label("Pay", systemImage: "creditcard.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+            }
+            
+            Button(role: .destructive) {
+                Task { await ordersViewModel.cancelOrder(order: order) }
+            } label: {
+                Label("Cancel", systemImage: "xmark.circle.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
         }
-        .sheet(item: $itemToEditQuantity) { itemToEdit in
-             EditOrderItemQuantitySheet(item: itemToEdit, order: $order, ordersViewModel: ordersViewModel)
-        }
-        .sheet(isPresented: $showingPaymentSheet) {
-            PaymentSheetView(order: $order, ordersViewModel: ordersViewModel)
-        }
-        // Overlay for toast messages specific to this view or passed from ViewModel
-        .overlay(
-            toastViewForDetail
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .padding(.bottom, 20)
-                .padding(.horizontal)
-        )
-        .onReceive(ordersViewModel.$errorMessage) { message in
-            if let msg = message, !msg.isEmpty {
-                self.detailToastMessage = msg; self.detailToastType = .error; self.showDetailMessageToast = true
-                // Important: Decide where the VM's message gets cleared.
-                // If OrdersListView also shows it, avoid double clearing or race conditions.
-                // For now, let OrderDetailView clear it if it's the active view.
-                 DispatchQueue.main.async { ordersViewModel.errorMessage = nil }
+    }
+
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigationBarTrailing) {
+            if isOrderEditable && !ordersViewModel.isPrinting && !ordersViewModel.isLoadingActiveOrders {
+                Button {
+                    hapticFeedbackLight.impactOccurred()
+                    showingAddItemSheet = true
+                } label: { Label("Add Item", systemImage: "plus.circle.fill") }
+                .accessibilityLabel("Add item to order")
             }
         }
-        .onReceive(ordersViewModel.$successMessage) { message in
-            if let msg = message, !msg.isEmpty {
-                self.detailToastMessage = msg; self.detailToastType = .success; self.showDetailMessageToast = true
-                 DispatchQueue.main.async { ordersViewModel.successMessage = nil }
-            }
-        }
-        .task {
-            if menuViewModel.menuItems.isEmpty {
-                menuViewModel.restaurantId = ordersViewModel.restaurantId
-                await menuViewModel.loadInitialData()
-            }
-        }
-        // Listen for changes in the order passed from OrdersViewModel (if it's a shared instance that gets updated)
-        // This ensures that if another part of the app updates this order, this view reflects it.
-        // This is more relevant if `order` was an @ObservedObject from a shared source.
-        // Since `order` is @State here, it's primarily updated via bindings or direct calls.
-        // However, if the `order` in `ordersViewModel.activeOrders` array changes, this @State copy won't automatically.
-        // A better pattern might be to pass order.id and fetch/observe it here or ensure the @State var is updated
-        // when the source in ordersViewModel changes (e.g. by making `order` an @ObservedObject if it's a class,
-        // or by finding and re-assigning it from ordersViewModel.activeOrders on some trigger).
-        // For now, we rely on actions within this view triggering updates that also update the VM's source.
-        .onChange(of: ordersViewModel.activeOrders) { _, newActiveOrders in
-             if let updatedOrder = newActiveOrders.first(where: { $0.id == self.order.id }) {
-                 self.order = updatedOrder // Keep local @State in sync
-             } else if !isOrderEditable { // If order became finished/cancelled, it might be removed from activeOrders
-                 // Potentially dismiss or show a message if the order is no longer "active"
-                 // For now, this view will persist with its last known state of the order.
-             }
-        }
-        .onChange(of: ordersViewModel.newOrders) { _, newNewOrders in // Less likely relevant for OrderDetailView
-             if let updatedOrder = newNewOrders.first(where: { $0.id == self.order.id }) {
-                 self.order = updatedOrder
-             }
-        }
+    }
+
+    private var toastOverlay: some View {
+        toastViewForDetail
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, 20)
+            .padding(.horizontal)
     }
 
     // MARK: - Subviews for OrderDetailView
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Table(s): \(order.tableDisplayString)")
-                    .font(.title2.bold())
+                    .font(.title2.weight(.semibold))
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
                 Spacer()
                 Text(order.status.replacingOccurrences(of: "_", with: " ").capitalized)
-                    .font(.caption.bold())
-                    .padding(6)
-                    .background(orderRowDisplayHelper.statusColor(order.status).opacity(0.2))
-                    .foregroundColor(orderRowDisplayHelper.statusColor(order.status))
-                    .cornerRadius(6)
+                    .font(.callout.bold())
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(getStatusColor(order.status).opacity(0.2))
+                    .foregroundColor(getStatusColor(order.status))
+                    .cornerRadius(8)
             }
-            Text("Guests: \(order.numberOfGuests)")
-                .font(.subheadline).foregroundColor(.secondary)
-            Text("Opened: \(order.orderedAt.dateValue(), style: .time)")
-                .font(.subheadline).foregroundColor(.secondary)
-            if let staffId = order.createdByStaffId, !staffId.isEmpty {
-                 Text("By Staff: \(staffId)")
-                    .font(.caption).foregroundColor(.gray)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    Image(systemName: "person.2")
+                        .foregroundColor(.secondary)
+                        .imageScale(.small)
+                        .accessibilityHidden(true)
+                    Text("Guests: \(order.numberOfGuests)")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                        .foregroundColor(.secondary)
+                        .imageScale(.small)
+                        .accessibilityHidden(true)
+                    Text("Opened: \(order.orderedAt.dateValue(), style: .time)")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                
+                if let staffId = order.createdByStaffId, !staffId.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.badge.key")
+                            .foregroundColor(.secondary)
+                            .imageScale(.small)
+                            .accessibilityHidden(true)
+                        Text("By Staff: \(staffId)")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                }
             }
         }
-        .padding(.bottom)
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 
     private var summarySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack { Text("Subtotal:"); Spacer(); Text(formattedPrice(order.subtotalAmount)) }
-            if order.discountAmount > 0 {
-                HStack { Text("Discount (\(String(format: "%.0f%%", order.discountPercentage))):"); Spacer(); Text("-\(formattedPrice(order.discountAmount))").foregroundColor(.orange) }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Order Summary")
+                .font(.headline)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+            
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Subtotal:")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(formattedPrice(order.subtotalAmount))
+                }
+                .font(.body)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                
+                if order.discountAmount > 0 {
+                    HStack {
+                        Text("Discount (\(String(format: "%.0f%%", order.discountPercentage))):")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("-\(formattedPrice(order.discountAmount))")
+                            .foregroundColor(.orange)
+                    }
+                    .font(.body)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                }
+                
+                Divider()
+                    .padding(.vertical, 4)
+                
+                HStack {
+                    Text("Total:")
+                        .font(.headline)
+                    Spacer()
+                    Text(formattedPrice(order.totalAmount))
+                        .font(.title3.bold())
+                }
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             }
-            HStack { Text("Total:"); Spacer(); Text(formattedPrice(order.totalAmount)).font(.headline.bold()) }
         }
-        .font(.subheadline).padding().background(Color(UIColor.secondarySystemGroupedBackground)).cornerRadius(10)
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 
     private var itemsSection: some View {
-        Section(header: Text("Order Items (\(displayableItemIndices.count))").font(.title3.weight(.semibold))) {
-            if displayableItemIndices.isEmpty {
-                Text(isOrderEditable ? "No active items. Add some!" : "No items were recorded.")
-                    .foregroundColor(.secondary).padding(.vertical).frame(maxWidth: .infinity)
-            } else {
-                ForEach(displayableItemIndices, id: \.self) { index in
-                    // Check if index is valid before accessing, crucial if array can change
-                    if order.items.indices.contains(index) {
-                        OrderItemRow(
-                            item: $order.items[index],
-                            isOrderEditable: isOrderEditable,
-                            ordersViewModel: ordersViewModel,
-                            order: order,
-                            onEditQuantity: {
-                                if order.items.indices.contains(index) { // Double check index validity
-                                    self.itemToEditQuantity = order.items[index]
-                                }
-                            }
-                        )
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Order Items")
+                    .font(.title3.bold())
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                Text("(\(displayableItemIndices.count))")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                Spacer()
+                if isOrderEditable {
+                    Button(action: { showingAddItemSheet = true }) {
+                        Label("Add Items", systemImage: "plus.circle.fill")
+                            .font(.callout.bold())
+                            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                     }
+                    .buttonStyle(.bordered)
+                    .tint(.blue)
                 }
             }
             
-            actionButtonsSection // Extracted action buttons to a new computed property
+            if displayableItemIndices.isEmpty {
+                Text(isOrderEditable ? "No active items. Add some!" : "No items were recorded.")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(displayableItemIndices, id: \.self) { index in
+                        if order.items.indices.contains(index) {
+                            let currentOrderItem = order.items[index]
+                            let menuItem = menuViewModel.menuItems.first(where: { $0.id == currentOrderItem.menuItemId })
+
+                            OrderItemRow(
+                                item: $order.items[index],
+                                isOrderEditable: isOrderEditable,
+                                ordersViewModel: ordersViewModel,
+                                order: order,
+                                menuItemImageUrl: menuItem?.imageUrl,
+                                onEditQuantity: {
+                                    hapticFeedback.impactOccurred()
+                                    if order.items.indices.contains(index) {
+                                        self.itemToEditQuantity = order.items[index]
+                                    }
+                                },
+                                onEditNotes: {
+                                    hapticFeedback.impactOccurred(intensity: 0.5)
+                                    if order.items.indices.contains(index) {
+                                        self.itemToEditNote = order.items[index]
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
     
-    @ViewBuilder
-    private var actionButtonsSection: some View {
-        if ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders {
-            HStack {
-                Spacer()
-                ProgressView()
-                Spacer()
-            }.padding(.top)
-        }
-        
-        if isOrderEditable {
-             printAndPayButtons
-                .padding(.top)
-        } else if order.status == AppConfig.OrderStatus.finished {
-            Button {
-                Task { await ordersViewModel.printCustomerReceipt(order: order, isOfficialReceipt: false) }
-            } label: { Label("Re-Print Customer Receipt", systemImage: "printer.fill").frame(maxWidth: .infinity) }
-            .buttonStyle(.bordered)
-            .tint(.secondary)
-            .disabled(ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders)
-        }
-    }
-    
-    private var printAndPayButtons: some View {
+    private var printPayAndCancelButtons: some View {
         VStack(spacing: 12) {
             Button {
+                hapticFeedbackMedium.impactOccurred()
                 Task { await ordersViewModel.printOrderToKitchen(order: order) }
             } label: { Label("Print to Kitchen", systemImage: "printer.dotmatrix.fill").frame(maxWidth: .infinity) }
             .buttonStyle(.borderedProminent).tint(.orange)
@@ -221,11 +450,24 @@ struct OrderDetailView: View {
 
             if isOrderPayable {
                 Button {
+                    hapticFeedbackMedium.impactOccurred()
                     showingPaymentSheet = true
                 } label: { Label("Proceed to Payment", systemImage: "creditcard.fill").frame(maxWidth: .infinity) }
                 .buttonStyle(.borderedProminent).tint(.green)
                 .disabled(ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders)
             }
+            
+            Button {
+                hapticFeedbackLight.impactOccurred() // Light haptic for bringing up a confirmation
+                showingCancelConfirmation = true
+            } label: {
+                Label("Cancel Order", systemImage: "xmark.octagon.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .accessibilityLabel("Cancel this order")
+            .buttonStyle(.bordered)
+            .tint(.red)
+            .disabled(ordersViewModel.isLoadingActiveOrders || ordersViewModel.isPrinting)
         }
     }
 
@@ -234,212 +476,95 @@ struct OrderDetailView: View {
         return formatter.string(from: NSNumber(value: price)) ?? "¥\(Int(price))"
     }
 
-    @ViewBuilder
     private var toastViewForDetail: some View {
-        if showDetailMessageToast {
-            Text(detailToastMessage)
-                .padding().background(detailToastType == .error ? Color.red.opacity(0.9) : (detailToastType == .success ? Color.green.opacity(0.9) : Color.blue.opacity(0.9)))
-                .foregroundColor(.white).cornerRadius(10).shadow(radius: 5)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-                        withAnimation { self.showDetailMessageToast = false }
+        Group {
+            if showDetailMessageToast {
+                Text(detailToastMessage)
+                    .font(.callout.bold())
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                    .padding()
+                    .background(detailToastType == .error ? Color.red.opacity(0.9) :
+                              (detailToastType == .success ? Color.green.opacity(0.9) :
+                                Color.blue.opacity(0.9)))
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                    .shadow(radius: 5)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+                            withAnimation { self.showDetailMessageToast = false }
+                        }
                     }
-                }
-        } else { EmptyView() }
+            }
+        }
     }
 }
 
-
-// MARK: - Sheet for Adding Items to Order
-struct AddItemsToOrderSheet: View {
-    @Binding var order: Order
+// MARK: - Item Note Edit Sheet
+struct ItemNoteEditSheetView: View {
+    @Binding var item: OrderItem
     @ObservedObject var ordersViewModel: OrdersViewModel
-    @ObservedObject var menuViewModel: MenuViewModel // For existing menu items
-
+    let orderId: String
     @Environment(\.dismiss) var dismiss
-    
-    // State for selecting existing menu items
-    @State private var selectedExistingItems: [MenuItem: Int] = [:]
-    @State private var menuSearchText: String = ""
+    @State private var noteText: String
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
 
-    // State for adding a custom item
-    @State private var showingCustomItemForm = false
-    @State private var customItemName: String = ""
-    @State private var customItemPriceString: String = ""
-    @State private var customItemQuantity: Int = 1
-    @State private var customItemNotes: String = ""
-    // Optional: category for custom item printing (e.g., "FOOD_CUSTOM", "DRINK_CUSTOM")
-    @State private var customItemCategoryForPrint: String = "CUSTOM_FOOD"
-    let customCategoriesForPrint = ["CUSTOM_FOOD", "CUSTOM_DRINK", "CUSTOM_OTHER"]
-
+    init(item: Binding<OrderItem>, ordersViewModel: OrdersViewModel, orderId: String) {
+        self._item = item
+        self.ordersViewModel = ordersViewModel
+        self.orderId = orderId
+        // Initialize with current notes, or empty string if nil
+        self._noteText = State(initialValue: item.wrappedValue.notes ?? "")
+    }
 
     var body: some View {
         NavigationView {
-            VStack {
-                Picker("Mode", selection: $showingCustomItemForm) {
-                    Text("From Menu").tag(false)
-                    Text("Custom Item").tag(true)
-                }
-                .pickerStyle(SegmentedPickerStyle())
-                .padding(.horizontal)
-                .padding(.top)
+            VStack(spacing: 15) {
+                TextEditor(text: $noteText)
+                    .accessibilityLabel("Item notes text editor")
+                    .frame(height: 150)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(UIColor.systemGray3), lineWidth: 1)
+                    )
+                    .padding(.horizontal)
 
-                if showingCustomItemForm {
-                    customItemEntryForm
-                } else {
-                    menuItemSelectionList
-                }
-                
-                actionButtons
-            }
-            .navigationTitle("Add Items to Order #\(order.orderNumber)")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { dismiss() } }
-            }
-            .task { // Load menu items if not already loaded
-                if !showingCustomItemForm && menuViewModel.menuItems.isEmpty {
-                    menuViewModel.restaurantId = ordersViewModel.restaurantId
-                    await menuViewModel.loadInitialData()
-                }
-            }
-        }
-    }
-
-    // Subview for selecting existing menu items
-    private var menuItemSelectionList: some View {
-        VStack {
-            SearchBar(text: $menuSearchText, placeholder: "Search menu...") // Re-use SearchBar from MenuListView
-                .padding(.horizontal)
-                .padding(.bottom, 5)
-            
-            List {
-                if menuViewModel.isLoading {
-                    ProgressView()
-                } else if filteredMenuItemsBySearch.isEmpty && !menuSearchText.isEmpty {
-                    Text("No menu items match '\(menuSearchText)'.")
-                        .foregroundColor(.secondary)
-                } else if menuViewModel.menuItems.isEmpty {
-                     Text("No menu items available to select.")
-                        .foregroundColor(.secondary)
-                } else {
-                    // Use menuViewModel.itemsGroupedForDisplay logic or a simplified version
-                    let categoriesToDisplay = menuViewModel.categories.filter { cat in
-                        menuViewModel.menuItems.contains(where: { $0.categoryId == cat.id && $0.isAvailable && (menuSearchText.isEmpty || $0.name.localizedCaseInsensitiveContains(menuSearchText) || ($0.nameJP?.localizedCaseInsensitiveContains(menuSearchText) ?? false)) })
-                    }.sorted()
-
-                    ForEach(categoriesToDisplay) { category in
-                        Section(header: Text(category.name)) {
-                            ForEach(menuViewModel.menuItems.filter { $0.categoryId == category.id && $0.isAvailable && (menuSearchText.isEmpty || $0.name.localizedCaseInsensitiveContains(menuSearchText) || ($0.nameJP?.localizedCaseInsensitiveContains(menuSearchText) ?? false)) }.sorted(by: {$0.displayOrder < $1.displayOrder})) { menuItem in
-                                AddItemRow(menuItem: menuItem, selectedQuantity: Binding(
-                                    get: { selectedExistingItems[menuItem, default: 0] },
-                                    set: { newValue in
-                                        if newValue > 0 {
-                                            selectedExistingItems[menuItem] = newValue
-                                        } else {
-                                            selectedExistingItems.removeValue(forKey: menuItem)
-                                        }
-                                    }
-                                ))
-                            }
-                        }
+                Button("Save Note") {
+                    hapticFeedbackMedium.impactOccurred()
+                    Task {
+                        let notesToSave = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        await ordersViewModel.updateOrderItemNotes(
+                            orderId: orderId,
+                            itemId: item.id,
+                            newNotes: notesToSave.isEmpty ? nil : notesToSave
+                        )
+                        // The @Binding 'item' in OrderItemRow should reflect this change
+                        // if OrdersViewModel correctly updates the order in its published array,
+                        // and OrderDetailView's @State order gets updated.
+                        dismiss()
                     }
                 }
-            }
-        }
-    }
-    
-    private var filteredMenuItemsBySearch: [MenuItem] {
-        if menuSearchText.isEmpty {
-            return menuViewModel.menuItems.filter { $0.isAvailable }
-        }
-        return menuViewModel.menuItems.filter {
-            $0.isAvailable &&
-            ($0.name.localizedCaseInsensitiveContains(menuSearchText) ||
-             ($0.nameJP?.localizedCaseInsensitiveContains(menuSearchText) ?? false) ||
-             ($0.code?.localizedCaseInsensitiveContains(menuSearchText) ?? false)
-            )
-        }
-    }
-
-
-    // Subview for entering a custom item
-    private var customItemEntryForm: some View {
-        Form {
-            Section(header: Text("Custom Item Details")) {
-                TextField("Item Name (e.g., Special Request)", text: $customItemName)
-                HStack {
-                    Text("Price (¥):")
-                    TextField("0", text: $customItemPriceString)
-                        .keyboardType(.decimalPad)
-                }
-                Stepper("Quantity: \(customItemQuantity)", value: $customItemQuantity, in: 1...20)
-                TextField("Notes (optional)", text: $customItemNotes, axis: .vertical)
-                    .lineLimit(3)
-                Picker("Category for Printing", selection: $customItemCategoryForPrint) {
-                    ForEach(customCategoriesForPrint, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")) }
-                }
-            }
-        }
-    }
-    
-    private var actionButtons: some View {
-        VStack {
-            if showingCustomItemForm {
-                Button("Add Custom Item to Order") {
-                    addCustomItemToOrder()
-                }
-                .padding()
+                .accessibilityLabel("Save item note")
                 .buttonStyle(.borderedProminent)
-                .disabled(customItemName.isEmpty || (Double(customItemPriceString) == nil) || customItemQuantity == 0)
-            } else {
-                if !selectedExistingItems.isEmpty {
-                     Button("Add \(selectedExistingItems.values.reduce(0, +)) Selected Item(s)") {
-                        addSelectedMenuItemsToOrder()
-                    }
-                    .padding()
-                    .buttonStyle(.borderedProminent)
-                }
-            }
-        }
-        .padding(.bottom)
-    }
+                .padding(.horizontal)
 
-    private func addSelectedMenuItemsToOrder() {
-        Task {
-            for (menuItem, quantity) in selectedExistingItems {
-                if quantity > 0 {
-                    let orderItem = OrderItem(menuItem: menuItem, quantity: quantity)
-                    await ordersViewModel.addItemToOrder(orderId: order.id!, item: orderItem)
+                Spacer()
+            }
+            .padding(.top, 20)
+            .navigationTitle("Edit Note for \(item.name)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .accessibilityLabel("Cancel editing note")
                 }
-            }
-            if ordersViewModel.errorMessage == nil { // Only dismiss if successful
-                dismiss()
-            }
-        }
-    }
-    
-    private func addCustomItemToOrder() {
-        guard !customItemName.isEmpty,
-              let price = Double(customItemPriceString), price >= 0,
-              customItemQuantity > 0 else {
-            // Basic validation, could show an alert
-            ordersViewModel.errorMessage = "Invalid custom item details."
-            return
-        }
-        
-        let customOrderItem = OrderItem(
-            customName: customItemName,
-            quantity: customItemQuantity,
-            unitPrice: price,
-            notes: customItemNotes.isEmpty ? nil : customItemNotes,
-            categoryIdForPrint: customItemCategoryForPrint
-        )
-        
-        Task {
-            await ordersViewModel.addItemToOrder(orderId: order.id!, item: customOrderItem)
-            if ordersViewModel.errorMessage == nil { // Only dismiss if successful
-                 dismiss()
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { // Clear button
+                        noteText = ""
+                    } label: { Image(systemName: "clear") }
+                    .accessibilityLabel("Clear note text")
+                }
             }
         }
     }
@@ -461,6 +586,7 @@ struct AddItemRow: View {
             Stepper(value: $selectedQuantity, in: 0...20) {
                 Text("Qty: \(selectedQuantity)")
             }
+            .accessibilityLabel("Quantity of \(menuItem.name) to add, current quantity \(selectedQuantity)")
         }
     }
 }
@@ -471,12 +597,17 @@ struct EditOrderItemQuantitySheet: View {
     @ObservedObject var ordersViewModel: OrdersViewModel
     @Environment(\.dismiss) var dismiss
     @State private var newQuantity: Int
+    @State private var quantityString: String = "" // For TextField
+    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
+
 
     init(item: OrderItem, order: Binding<Order>, ordersViewModel: OrdersViewModel) {
         self.item = item
         self._order = order
         self.ordersViewModel = ordersViewModel
-        _newQuantity = State(initialValue: item.quantity)
+        let initialQuantity = item.quantity
+        _newQuantity = State(initialValue: initialQuantity)
+        _quantityString = State(initialValue: "\(initialQuantity)")
     }
 
     var body: some View {
@@ -484,126 +615,75 @@ struct EditOrderItemQuantitySheet: View {
             VStack(spacing: 20) {
                 Text("Edit Quantity for").font(.title2.bold())
                 Text(item.name).font(.title3)
-                Stepper("Quantity: \(newQuantity)", value: $newQuantity, in: 0...50).padding()
+
+                HStack {
+                    TextField("Enter Quantity", text: $quantityString)
+                        .keyboardType(.numberPad)
+                        .frame(width: 80)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .multilineTextAlignment(.center)
+                        .accessibilityLabel("Quantity input field, current value \(quantityString)")
+                        .onChange(of: quantityString) { _, newValue in
+                            if let qty = Int(newValue), qty >= 0 {
+                                let maxQty = 50
+                                newQuantity = min(qty, maxQty)
+                                if qty > maxQty {
+                                    quantityString = "\(maxQty)"
+                                }
+                            } else if newValue.isEmpty {
+                                newQuantity = 0
+                            } else {
+                                quantityString = "\(newQuantity)"
+                            }
+                        }
+                    Stepper("Quantity: \(newQuantity)", value: $newQuantity, in: 0...50)
+                        .accessibilityLabel("Quantity stepper, current quantity \(newQuantity)")
+                        .onChange(of: newQuantity) { _, currentQty in
+                            quantityString = "\(currentQty)"
+                        }
+                }
+                .padding()
+                .onAppear {
+                    quantityString = "\(newQuantity)"
+                }
+
                 Button(newQuantity == 0 ? "Remove Item" : "Update Quantity") {
+                    hapticFeedbackMedium.impactOccurred()
+                    if let qtyFromString = Int(quantityString), qtyFromString != newQuantity {
+                        newQuantity = qtyFromString >= 0 ? min(qtyFromString, 50) : 0
+                    } else if Int(quantityString) == nil && !quantityString.isEmpty {
+                        quantityString = "\(newQuantity)"
+                    }
+
                     Task {
                         await ordersViewModel.updateOrderItemQuantity(orderId: order.id!, itemId: item.id, newQuantity: newQuantity)
                         dismiss()
                     }
                 }
+                .accessibilityLabel(newQuantity == 0 ? "Remove item from order" : "Update item quantity")
                 .buttonStyle(.borderedProminent).tint(newQuantity == 0 ? .red : .blue)
                 Spacer()
             }
             .padding()
             .navigationTitle("Edit Item")
-            .toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .accessibilityLabel("Cancel editing quantity")
+                }
+            }
         }
     }
 }
 
-
-
-struct PaymentSheetView: View {
-    @Binding var order: Order
-    @ObservedObject var ordersViewModel: OrdersViewModel
-    @Environment(\.dismiss) var dismiss
-
-    @State private var selectedPaymentMethod: String = AppConfig.PaymentMethods.cash
-    @State private var amountTenderedString: String = ""
-    @State private var discountPercentString: String = "0"
-    
-    let paymentMethods = [AppConfig.PaymentMethods.cash, AppConfig.PaymentMethods.payPay, AppConfig.PaymentMethods.creditCard]
-    
-    private var currentDiscountPercentage: Double { Double(discountPercentString) ?? order.discountPercentage }
-    private var subtotalAfterItemDiscounts: Double { order.subtotalAmount }
-    private var orderDiscountAmount: Double { (subtotalAfterItemDiscounts * currentDiscountPercentage) / 100.0 }
-    private var finalTotal: Double { subtotalAfterItemDiscounts - orderDiscountAmount }
-    private var amountTendered: Double? { Double(amountTenderedString) }
-    
-    private var changeDue: Double? {
-        guard let tendered = amountTendered else { return nil }
-        return tendered - finalTotal
-    }
-    
-    var canFinalize: Bool {
-        if selectedPaymentMethod == AppConfig.PaymentMethods.cash {
-            return amountTendered != nil && amountTendered! >= finalTotal
-        }
-        return true
-    }
-
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Order Summary") {
-                    // ... (content as provided before) ...
-                    HStack { Text("Subtotal:"); Spacer(); Text(formattedPrice(subtotalAfterItemDiscounts)) }
-                    HStack {
-                        Text("Order Discount (%):")
-                        Spacer()
-                        TextField("0", text: $discountPercentString)
-                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 60)
-                    }
-                    HStack { Text("Discount Amount:"); Spacer(); Text("-\(formattedPrice(orderDiscountAmount))").foregroundColor(.orange) }
-                    HStack { Text("Final Total:"); Spacer(); Text(formattedPrice(finalTotal)).font(.headline.bold()) }
-                }
-
-                Section("Payment") {
-                    // ... (content as provided before) ...
-                    Picker("Payment Method", selection: $selectedPaymentMethod) {
-                        ForEach(paymentMethods, id: \.self) { Text($0.capitalized) }
-                    }
-                    
-                    if selectedPaymentMethod == AppConfig.PaymentMethods.cash {
-                        HStack {
-                            Text("Amount Tendered:")
-                            Spacer()
-                            TextField("Enter amount", text: $amountTenderedString).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                        }
-                        if let change = changeDue, change >= 0 {
-                            HStack { Text("Change Due:"); Spacer(); Text(formattedPrice(change)).foregroundColor(.green) }
-                        } else if amountTendered != nil && amountTendered! < finalTotal {
-                             Text("Amount tendered is less than total.").foregroundColor(.red).font(.caption)
-                        }
-                    }
-                }
-                
-                Section {
-                    // ... (content as provided before) ...
-                    Button("Finalize & Pay") {
-                        Task {
-                            await ordersViewModel.finalizeOrder(
-                                order: order,
-                                paymentMethod: selectedPaymentMethod,
-                                amountPaid: selectedPaymentMethod == AppConfig.PaymentMethods.cash ? (amountTendered ?? finalTotal) : finalTotal,
-                                discountPercentage: currentDiscountPercentage
-                            )
-                            if ordersViewModel.errorMessage == nil {
-                                var finalOrderState = order
-                                finalOrderState.paymentMethod = selectedPaymentMethod
-                                finalOrderState.amountPaid = selectedPaymentMethod == AppConfig.PaymentMethods.cash ? (amountTendered ?? finalTotal) : finalTotal
-                                finalOrderState.discountPercentage = currentDiscountPercentage
-                                
-                                await ordersViewModel.printCustomerReceipt(order: finalOrderState, isOfficialReceipt: true)
-                                dismiss()
-                            }
-                        }
-                    }
-                    .disabled(!canFinalize || ordersViewModel.isLoadingActiveOrders || ordersViewModel.isPrinting)
-                    .frame(maxWidth: .infinity)
-                }
-                
-                if ordersViewModel.isLoadingActiveOrders || ordersViewModel.isPrinting { ProgressView().frame(maxWidth: .infinity) }
-                if let error = ordersViewModel.errorMessage { Text(error).foregroundColor(.red).frame(maxWidth: .infinity) }
-            }
-            .navigationTitle("Complete Payment")
-            .toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { dismiss() } } }
-            .onAppear { discountPercentString = String(format: "%.0f", order.discountPercentage) }
-        }
-    }
-    
-    private func formattedPrice(_ price: Double) -> String {
-        let formatter = NumberFormatter(); formatter.numberStyle = .currency; formatter.currencySymbol = "¥"; formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: price)) ?? "¥\(Int(price))"
+// Helper to get status color for order status
+private func getStatusColor(_ status: String) -> Color {
+    switch status.lowercased() {
+    case "new": return .blue
+    case "in_progress": return .orange
+    case "printed": return .purple
+    case "finished": return .green
+    case "cancelled": return .red
+    default: return .gray
     }
 }

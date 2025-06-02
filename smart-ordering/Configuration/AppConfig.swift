@@ -1,11 +1,12 @@
 //
-//  AppConfig.swift.swift
+//  AppConfig.swift
 //  smart-ordering
 //
 //  Created by Dang Hoang on 2025/05/26.
 //
 
 import Foundation
+import SwiftUI
 
 enum AppEnvironment {
     case debug
@@ -54,7 +55,7 @@ class AppConfig {
         self.webAppBaseURL = "https://yourwebapp.com" // Replace with your actual production URL
         #endif
         
-        self.defaultRestaurantId = "thuanVietShinKoiwa" // Example ID
+        self.defaultRestaurantId = "shin-koi-wa" // Example ID
 
         // Default printer settings (can be made configurable later via UI)
         // These are from your old PRINTER struct
@@ -84,7 +85,7 @@ class AppConfig {
         let isDemo = UserDefaults.standard.bool(forKey: "isDemoMode") // Or get from AppSettings
 
         if isDemo {
-            self.firestoreCollectionPrefix = "staging_demo" // Or a specific demo prefix
+            self.firestoreCollectionPrefix = "staging" // Or a specific demo prefix
             self.webAppBaseURL = "https://demo.yourwebapp.com" // Replace
         } else {
             #if DEBUG
@@ -100,7 +101,7 @@ class AppConfig {
         print("AppConfig refreshed: Prefix = \(self.firestoreCollectionPrefix), WebURL = \(self.webAppBaseURL)")
     }
 
-    // Constants for Order Statuses (from your old ORDER_STATUS)
+    // MARK: - Order Status Constants
     struct OrderStatus {
         static let pending = "10_pending"       // New order from web/manual
         static let printed = "09_printed"       // Printed to kitchen
@@ -112,33 +113,162 @@ class AppConfig {
         static let removed = "00_removed"       // Item removed by staff (soft delete)
     }
     
-    struct PaymentMethods { // These were global in your old code.
+    // MARK: - Table Status Constants
+    struct TableStatus {
+        static let available = "available"
+        static let occupied = "occupied"
+        static let reserved = "reserved"
+        static let needsCleaning = "needs_cleaning"
+        static let outOfService = "out_of_service"
+    }
+
+    // MARK: - Payment Methods
+    struct PaymentMethods {
         static let cash = "Cash"
         static let payPay = "PayPay" // Consistent camelCase
         static let creditCard = "Credit Card" // More descriptive
     }
     
-    // Printer Commands (ESC/POS) - from your old PRINTER_CODE
-    // These are highly printer-specific.
+    // MARK: - Accessible Color Scheme
+    struct Colors {
+        // Primary Colors (meet WCAG AA standards)
+        static let primary = Color(hex: "007AFF")       // iOS Blue
+        static let primaryDark = Color(hex: "0055B3")   // Darker shade for better contrast
+        static let primaryLight = Color(hex: "4DA3FF")  // Lighter shade for backgrounds
+        
+        // Status Colors (all meet WCAG AA for text contrast)
+        static let success = Color(hex: "28CD41")       // Green
+        static let warning = Color(hex: "FF9500")       // Orange
+        static let error = Color(hex: "FF3B30")         // Red
+        static let info = Color(hex: "5856D6")          // Purple
+        
+        // Table Status Colors
+        static let tableAvailable = Color(hex: "34C759")    // Green
+        static let tableOccupied = Color(hex: "FF3B30")     // Red
+        static let tableReserved = Color(hex: "FF9500")     // Orange
+        static let tableNeedsCleaning = Color(hex: "FFD60A") // Yellow
+        static let tableOutOfService = Color(hex: "8E8E93")  // Gray
+        
+        // Order Status Colors
+        static let orderPending = Color(hex: "8E8E93")      // Gray
+        static let orderPrinted = Color(hex: "FF9500")      // Orange
+        static let orderPreparing = Color(hex: "5856D6")    // Purple
+        static let orderReady = Color(hex: "007AFF")        // Blue
+        static let orderDelivered = Color(hex: "34C759")    // Green
+        static let orderCancelled = Color(hex: "FF3B30")    // Red
+        
+        // Background Colors
+        static let background = Color(.systemBackground)
+        static let secondaryBackground = Color(.secondarySystemBackground)
+        static let groupedBackground = Color(.systemGroupedBackground)
+        static let secondaryGroupedBackground = Color(.secondarySystemGroupedBackground)
+        
+        // Text Colors
+        static let text = Color(.label)
+        static let secondaryText = Color(.secondaryLabel)
+        static let tertiaryText = Color(.tertiaryLabel)
+        static let quaternaryText = Color(.quaternaryLabel)
+        
+        // Helper function to get status color with proper opacity
+        static func statusColor(_ status: String, opacity: Double = 1.0) -> Color {
+            switch status {
+            case OrderStatus.pending:
+                return orderPending.opacity(opacity)
+            case OrderStatus.printed:
+                return orderPrinted.opacity(opacity)
+            case OrderStatus.preparing:
+                return orderPreparing.opacity(opacity)
+            case OrderStatus.readyForDelivery:
+                return orderReady.opacity(opacity)
+            case OrderStatus.delivered:
+                return orderDelivered.opacity(opacity)
+            case OrderStatus.finished:
+                return orderDelivered.opacity(opacity)
+            case OrderStatus.cancelled, OrderStatus.removed:
+                return orderCancelled.opacity(opacity)
+            default:
+                return text.opacity(opacity)
+            }
+        }
+        
+        // Helper function to get table status color with proper opacity
+        static func tableStatusColor(_ status: String, opacity: Double = 1.0) -> Color {
+            switch status {
+            case TableStatus.available:
+                return tableAvailable.opacity(opacity)
+            case TableStatus.occupied:
+                return tableOccupied.opacity(opacity)
+            case TableStatus.reserved:
+                return tableReserved.opacity(opacity)
+            case TableStatus.needsCleaning:
+                return tableNeedsCleaning.opacity(opacity)
+            case TableStatus.outOfService:
+                return tableOutOfService.opacity(opacity)
+            default:
+                return text.opacity(opacity)
+            }
+        }
+        
+        // Helper function to determine if a color needs white or black text for contrast
+        static func requiredTextColor(for backgroundColor: Color) -> Color {
+            // Convert SwiftUI Color to UIColor for luminance calculation
+            let uiColor = UIColor(backgroundColor)
+            var red: CGFloat = 0
+            var green: CGFloat = 0
+            var blue: CGFloat = 0
+            var alpha: CGFloat = 0
+            
+            uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+            
+            // Calculate relative luminance using WCAG formula
+            let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+            
+            // Return white for dark backgrounds, black for light backgrounds
+            return luminance > 0.5 ? Color.black : Color.white
+        }
+    }
+    
+    // MARK: - Printer Commands (ESC/POS Commands)
     struct PrinterCommands {
         static let initialize: [UInt8] = [0x1B, 0x40] // ESC @
-        static let fontSize24: [UInt8] = [27, 33, 16]  // Double W, Double H
-        static let fontSize12: [UInt8] = [27, 33, 0]   // Normal size (or specific like [27, 33, 12])
-        static let boldOn: [UInt8] = [27, 69, 1]
-        static let boldOff: [UInt8] = [27, 69, 0]
-        static let resetStyles: [UInt8] = [27, 33, 0]
-        static let alignLeft: [UInt8] = [27, 97, 0]
-        static let alignCenter: [UInt8] = [27, 97, 1]
-        static let alignRight: [UInt8] = [27, 97, 2]
-        static let cutPaperFull: [UInt8] = [29, 86, 0] // or [29, 86, 65, 0] for partial
-        static let cutPaperPartial: [UInt8] = [29, 86, 1] // or [29, 86, 66, 0]
-        static let lineFeed: [UInt8] = [0x0A]
-        // QR Code related commands are more complex and often specific to printer models / libraries
-        // Example structure (to be verified with printer manual):
-        // static func setQRCodeModel(_ model: UInt8 = 2) -> [UInt8] { [0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, model, 0x00] }
-        // static func setQRCodeSize(_ size: UInt8) -> [UInt8] { ... }
-        // static func setQRCodeErrorCorrection(_ level: UInt8) -> [UInt8] { ... } // e.g., 0x30 (L) to 0x33 (H)
-        // static func storeQRCodeData(_ data: Data) -> [UInt8] { ... }
-        // static func printQRCode() -> [UInt8] { [0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30] }
+        static let lineFeed: [UInt8] = [0x0A] // LF
+        static let fontSize12: [UInt8] = [0x1B, 0x21, 0x00] // Normal size
+        static let fontSize24: [UInt8] = [0x1B, 0x21, 0x30] // Double height and width
+        static let boldOn: [UInt8] = [0x1B, 0x45, 0x01] // ESC E 1
+        static let boldOff: [UInt8] = [0x1B, 0x45, 0x00] // ESC E 0
+        static let alignLeft: [UInt8] = [0x1B, 0x61, 0x00] // ESC a 0
+        static let alignCenter: [UInt8] = [0x1B, 0x61, 0x01] // ESC a 1
+        static let alignRight: [UInt8] = [0x1B, 0x61, 0x02] // ESC a 2
+        static let resetStyles: [UInt8] = [0x1B, 0x21, 0x00] // Reset text styles
+        static let cutPaperFull: [UInt8] = [0x1D, 0x56, 0x00] // Full cut
+        static let cutPaperPartial: [UInt8] = [0x1D, 0x56, 0x01] // Partial cut
+    }
+}
+
+// MARK: - Color Extension for Hex Support
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+        
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue:  Double(b) / 255,
+            opacity: Double(a) / 255
+        )
     }
 }

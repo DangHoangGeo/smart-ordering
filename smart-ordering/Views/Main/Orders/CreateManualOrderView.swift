@@ -13,14 +13,12 @@ struct CreateManualOrderView: View {
     @EnvironmentObject var userViewModel: UserViewModel
     @EnvironmentObject var appSettings: AppSettings // Assuming AppSettings provides restaurantId or other config
 
-    @State private var tableCodesInput: String = ""
     @State private var numberOfGuests: Int = 1
     @State private var orderNotes: String = ""
     
     // For future visual table selection
-    // @State private var showingTableSelectionSheet = false
-    // @State private var selectedTableObjects: [Table] = []
-
+    @State private var showingTableSelectionSheet = false
+    @State private var selectedTables: Set<Table> = []  // Changed to Set<Table>
     @State private var errorMessage: String?
     
     // Completion handler to pass back the created order
@@ -31,27 +29,17 @@ struct CreateManualOrderView: View {
         NavigationView {
             Form {
                 Section("Order Details") {
-                    HStack {
-                        Text("Table Code(s):")
-                        TextField("e.g., T01 or Takeout", text: $tableCodesInput)
-                            .autocapitalization(.none)
-                            .submitLabel(.done) // Improves keyboard interaction
-                    }
-                    Text("Enter table codes separated by commas, or type '\(AppConfig.shared.restaurantDetails.takeoutTableCode)' for takeout.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    // Placeholder for future visual table selection button
-                    /*
-                    Button(action: { showingTableSelectionSheet = true }) {
+                    Button(action: {
+                        showingTableSelectionSheet = true
+                        print("Showing table selection sheet")
+                    }) {
                         HStack {
-                            Text(selectedTableObjects.isEmpty ? "Select Tables" : selectedTableObjects.map(\.code).joined(separator: ", "))
+                            Text(selectedTables.isEmpty ? "Select Tables" : "Tables: \(selectedTables.map(\.code).joined(separator: ", "))")
                             Spacer()
                             Image(systemName: "chevron.right")
                         }
                     }
                     .foregroundColor(.primary)
-                    */
 
                     Stepper("Guests: \(numberOfGuests)", value: $numberOfGuests, in: 1...50) // Increased max guests
                     
@@ -65,6 +53,7 @@ struct CreateManualOrderView: View {
                                 RoundedRectangle(cornerRadius: 8)
                                     .stroke(Color(UIColor.systemGray4), lineWidth: 1)
                             )
+                            .onTapGesture {} // Empty gesture to prevent Form tap gesture
                     }
                 }
 
@@ -90,7 +79,7 @@ struct CreateManualOrderView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(ordersViewModel.isLoadingActiveOrders || tableCodesInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(ordersViewModel.isLoadingActiveOrders || selectedTables.isEmpty)
                 }
             }
             .navigationTitle("New Manual Order")
@@ -99,9 +88,8 @@ struct CreateManualOrderView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
-            // .sheet(isPresented: $showingTableSelectionSheet) { /* TableSelectionView */ } // Future
-            .onTapGesture { // Dismiss keyboard on tap outside
-                 hideKeyboard()
+            .sheet(isPresented: $showingTableSelectionSheet) {
+                TableSelectionSheet(selectedTables: $selectedTables)
             }
         }
     }
@@ -109,29 +97,17 @@ struct CreateManualOrderView: View {
     private func validateAndCreateOrder() {
         hideKeyboard()
         errorMessage = nil
-        let tableIdsToUse: [String]
         
-        // For now, we use tableCodesInput. selectedTableObjects would be used with a visual picker.
-        // if !selectedTableObjects.isEmpty {
-        //     tableIdsToUse = selectedTableObjects.compactMap { $0.id }
-        // } else
-        if !tableCodesInput.isEmpty {
-            tableIdsToUse = tableCodesInput.split(separator: ",")
-                .map { String($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                .filter { !$0.isEmpty }
-        } else {
-            errorMessage = "Please enter at least one table code (e.g., T01) or '\(AppConfig.shared.restaurantDetails.takeoutTableCode)'."
-            return
-        }
-
-        guard !tableIdsToUse.isEmpty else {
-            errorMessage = "No valid table codes provided."
+        guard !selectedTables.isEmpty else {
+            errorMessage = "Please select at least one table."
             return
         }
         
-        let isTakeoutOrder = tableIdsToUse.contains { $0.localizedCaseInsensitiveCompare(AppConfig.shared.restaurantDetails.takeoutTableCode) == .orderedSame }
-        if isTakeoutOrder && tableIdsToUse.count > 1 {
-            errorMessage = "Takeout order cannot be combined with other tables. Please enter only '\(AppConfig.shared.restaurantDetails.takeoutTableCode)'."
+        let tableIdsToUse = selectedTables.compactMap { $0.id }
+        
+        let isTakeoutOrder = selectedTables.contains { $0.code.localizedCaseInsensitiveCompare(AppConfig.shared.restaurantDetails.takeoutTableCode) == .orderedSame }
+        if isTakeoutOrder && selectedTables.count > 1 {
+            errorMessage = "Takeout order cannot be combined with other tables. Please select only '\(AppConfig.shared.restaurantDetails.takeoutTableCode)'."
             return
         }
         let finalTableIds = isTakeoutOrder ? [AppConfig.shared.restaurantDetails.takeoutTableCode] : tableIdsToUse

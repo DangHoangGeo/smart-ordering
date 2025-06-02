@@ -21,9 +21,13 @@ struct LoginView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background (optional, could be a subtle gradient or image)
-                // For simplicity, using system grouped background
-                backgroundColor.edgesIgnoringSafeArea(.all)
+                // Define a subtle gradient for the background
+                LinearGradient(
+                    gradient: Gradient(colors: [Color(UIColor.systemBackground), Color(UIColor.secondarySystemBackground)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .edgesIgnoringSafeArea(.all)
 
                 ScrollView {
                     VStack(spacing: 0) { // Reduced spacing for tighter grouping
@@ -31,12 +35,10 @@ struct LoginView: View {
                         // Logo and App Name
                         VStack {
                             Image("app_logo")
-                                .resizable()
+                                .accessibilityLabel("Application Logo")
                                 .scaledToFit()
                                 .frame(width: 100, height: 100)
                                 .clipShape(RoundedRectangle(cornerRadius: 20))
-                                .shadow(color: .gray.opacity(0.4), radius: 5, y: 5)
-                                .padding(.top, geometry.safeAreaInsets.top + 20) // Adjust top padding
 
                             Text("Smart Ordering")
                                 .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -53,11 +55,14 @@ struct LoginView: View {
                         VStack(spacing: 15) {
                             CustomTextField(placeholder: "Email", text: $email, systemImageName: "envelope.fill")
                                 .keyboardType(.emailAddress)
+                                .accessibilityLabel("Email input field")
                             
                             CustomSecureField(placeholder: "Password", text: $password, systemImageName: "lock.fill")
+                                .accessibilityLabel("Password input field")
                             
                             if isSigningUp {
                                 CustomSecureField(placeholder: "Confirm Password", text: $confirmPassword, systemImageName: "lock.fill")
+                                    .accessibilityLabel("Confirm password input field")
                             }
                         }
                         .padding(.horizontal, 30)
@@ -129,15 +134,20 @@ struct LoginView: View {
                     .font(.footnote)
                     .foregroundColor(.red)
                     .multilineTextAlignment(.center)
+                    .padding(.vertical, 5) // Add padding inside the text view
+                    .padding(.horizontal, 10)
                     .frame(minHeight: 30) // Reserve space
             } else if let successMessage = userViewModel.successMessage {
                 Text(successMessage)
                     .font(.footnote)
                     .foregroundColor(.green)
                     .multilineTextAlignment(.center)
+                    .padding(.vertical, 5) // Add padding inside the text view
+                    .padding(.horizontal, 10)
                     .frame(minHeight: 30) // Reserve space
             } else {
-                Spacer().frame(minHeight: 30) // Reserve space if no message
+                // Spacer to maintain layout consistency when no message is shown
+                Spacer().frame(minHeight: 30) // Reserve space, matches Text views
             }
         }
     }
@@ -170,6 +180,7 @@ struct LoginView: View {
             Text(isSigningUp ? "Sign Up" : "Log In")
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
+                .accessibilityLabel(isSigningUp ? "Sign Up button" : "Log In button")
                 .padding()
                 .foregroundColor(.white)
                 .background(primaryColor)
@@ -248,6 +259,7 @@ struct CustomTextField: View {
             TextField(placeholder, text: $text)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
+                .accessibilityLabel(placeholder) // Use placeholder as label for the field itself
         }
         .padding()
         .background(Color(UIColor.secondarySystemBackground)) // More subtle background
@@ -270,6 +282,7 @@ struct CustomSecureField: View {
             }
             SecureField(placeholder, text: $text)
                 .textContentType(.newPassword) // Helps with password managers
+                .accessibilityLabel(placeholder) // Use placeholder as label for the field itself
         }
         .padding()
         .background(Color(UIColor.secondarySystemBackground))
@@ -308,6 +321,7 @@ struct ForgotPasswordSheet: View {
 
                 CustomTextField(placeholder: "Email", text: $emailForReset, systemImageName: "envelope.fill")
                     .keyboardType(.emailAddress)
+                    .accessibilityLabel("Email input field for password reset")
 
                 if userViewModel.isLoadingAuthState {
                     ProgressView()
@@ -328,6 +342,7 @@ struct ForgotPasswordSheet: View {
                     }
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
+                    .accessibilityLabel("Send Password Reset Link button")
                     .padding()
                     .foregroundColor(.white)
                     .background(Color.blue)
