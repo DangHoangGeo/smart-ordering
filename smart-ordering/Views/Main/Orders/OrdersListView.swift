@@ -53,12 +53,9 @@ struct OrdersListView: View {
         .sheet(isPresented: $showingCreateOrderSheet, onDismiss: {
             // This onDismiss is for the CreateManualOrderView sheet
         }) {
+            // Changed: Remove binding argument and use closure initializer
             CreateManualOrderView { createdOrder in
-                // This closure is called when CreateManualOrderView successfully creates an order
                 self.orderForAddingItems = createdOrder
-                // Important: Dismiss the first sheet *before* presenting the second
-                // This often requires a slight delay or managing sheet presentation more carefully.
-                // For now, setting the state variable will trigger the second sheet.
                 self.showingAddItemsToNewOrderSheet = true
             }
             .environmentObject(ordersViewModel)
@@ -70,23 +67,18 @@ struct OrdersListView: View {
             // Optionally, refresh active orders here if items were added successfully
             // Task { await ordersViewModel.fetchActiveOrders() }
         }) {
-            // This sheet is for adding items to the order *just created* manually
             if let order = orderForAddingItems {
-                AddItemsToOrderSheet(
-                    // Pass a binding to the order if AddItemsToOrderSheet needs to modify order-level props
-                    // If it only adds items via ViewModel, a non-binding `let order: Order` is fine.
-                    // The current AddItemsToOrderSheet uses `@Binding var order`, so we pass it.
-                    // However, the actual modifications happen via ordersViewModel.
-                    order: .constant(order), // Use .constant if order details aren't changed directly by this sheet
-                    ordersViewModel: ordersViewModel,
-                    // Create a new MenuViewModel instance specifically for this sheet
-                    menuViewModel: MenuViewModel(restaurantId: ordersViewModel.restaurantId)
-                )
+                AddItemsToOrderSheet(order: order)
+                    .environmentObject(ordersViewModel)
             } else {
-                // Fallback view, though this state should ideally not be reached
-                // if `orderForAddingItems` is correctly set before `showingAddItemsToNewOrderSheet` becomes true.
                 Text("Error: Order context lost. Please try creating the order again.")
                     .padding()
+            }
+        }
+        // Added: when orderForAddingItems is set, trigger the addition sheet
+        .onChange(of: orderForAddingItems) {
+            if orderForAddingItems != nil {
+            showingAddItemsToNewOrderSheet = true
             }
         }
         .overlay(
@@ -134,7 +126,10 @@ struct OrdersListView: View {
                     .foregroundColor(.secondary).padding(.vertical).centeredInList()
             } else {
                 ForEach(ordersViewModel.newOrders) { order in
-                    NavigationLink(destination: OrderDetailView(ordersViewModel: ordersViewModel, order: order)) {
+                    NavigationLink {
+                        // Changed: Pass ordersViewModel before order
+                        OrderDetailView(ordersViewModel: ordersViewModel, order: order)
+                    } label: {
                         OrderRow(order: order, isNew: true)
                     }
                 }
@@ -143,16 +138,19 @@ struct OrdersListView: View {
     }
 
     private var activeOrdersSection: some View {
-        Section(header: Text("Active Orders (\(ordersViewModel.activeOrders.count))").font(.headline)) { // Original header is fine
+        Section(header: Text("Active Orders (\(ordersViewModel.activeOrders.count))").font(.headline)) {
             if ordersViewModel.isLoadingActiveOrders && ordersViewModel.activeOrders.isEmpty {
                 ProgressView("Loading active orders...").centeredInList()
             } else if ordersViewModel.activeOrders.isEmpty {
-                Text("No active orders. Tap the '+' button above to create one!") // Enhanced empty state
+                Text("No active orders. Tap the '+' button above to create one!")
                     .foregroundColor(.secondary).padding(.vertical).centeredInList()
             } else {
                 ForEach(ordersViewModel.activeOrders) { order in
-                    NavigationLink(destination: OrderDetailView(ordersViewModel: ordersViewModel, order: order)) {
-                        OrderRow(order: order)
+                    NavigationLink {
+                        // Changed: Pass ordersViewModel before order
+                        OrderDetailView(ordersViewModel: ordersViewModel, order: order)
+                    } label: {
+                        OrderRow(order: order, isNew: false)
                     }
                 }
             }

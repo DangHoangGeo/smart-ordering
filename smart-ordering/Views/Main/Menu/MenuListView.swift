@@ -88,21 +88,30 @@ struct MenuListView: View {
     }
 
     private func menuSectionContent(_ section: (category: MenuCategory, items: [MenuItem])) -> some View {
-        Group {
+        VStack {
             if section.items.isEmpty {
                 Text("No items in this category\(menuViewModel.searchText.isEmpty ? "" : " matching your search").")
                     .foregroundColor(.secondary)
                     .padding()
             } else {
-                ForEach(section.items) { item in
+                ForEach(section.items, id: \.id) { item in
                     MenuItemRow(item: item,
-                              onEdit: { self.itemToEdit = item },
-                              onToggleAvailability: {
-                                  Task { await menuViewModel.toggleItemAvailability(item) }
-                              })
-                }
-                .onDelete { indexSet in
-                    deleteItems(at: indexSet, in: section.category)
+                                quantity: 0, // Quantity is not used in this context
+                                onSelect: {
+                        self.itemToEdit = item
+                    })
+                    .contextMenu {
+                        Button {
+                            Task { await menuViewModel.toggleItemAvailability(item) }
+                        } label: {
+                            Label(item.isAvailable ? "Make Unavailable" : "Make Available", systemImage: item.isAvailable ? "xmark.circle" : "checkmark.circle")
+                        }
+                        Button(role: .destructive) {
+                            Task { await menuViewModel.deleteMenuItem(item) }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
             }
         }
@@ -204,106 +213,6 @@ struct CategoryFilterView: View {
     }
 }
 
-
-// Placeholder for MenuItemRow - We'll detail this next
-struct MenuItemRow: View {
-    let item: MenuItem
-    var onEdit: () -> Void
-    var onToggleAvailability: () -> Void
-    @State private var hapticFeedbackLight = UIImpactFeedbackGenerator(style: .light)
-
-
-    var body: some View {
-        HStack {
-            if let imageUrlString = item.imageUrl, let url = URL(string: imageUrlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        ProgressView()
-                            .frame(width: 60, height: 60)
-                            .accessibilityLabel("Loading image for \(item.name)")
-                    case .success(let image):
-                        image.resizable()
-                             .aspectRatio(contentMode: .fill)
-                             .frame(width: 60, height: 60)
-                             .clipShape(RoundedRectangle(cornerRadius: 8))
-                             .accessibilityLabel("Image of \(item.name)")
-                    case .failure:
-                        Image(systemName: "fork.knife.circle.fill") // Placeholder icon
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 60, height: 60)
-                            .foregroundColor(.gray)
-                            .background(Color.gray.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .accessibilityLabel("Image placeholder for \(item.name)")
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-            } else {
-                Image(systemName: "fork.knife.circle.fill") // Placeholder for no image
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 60, height: 60)
-                    .foregroundColor(.gray)
-                    .background(Color.gray.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .accessibilityLabel("No image available for \(item.name)")
-            }
-
-            VStack(alignment: .leading) {
-                Text(item.name)
-                    .font(.headline)
-                if let nameJP = item.nameJP, !nameJP.isEmpty {
-                    Text(nameJP)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                Text(String(format: "¥%.0f", item.price)) // Format price
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-            }
-
-            Spacer()
-
-            Image(systemName: item.isAvailable ? "eye.fill" : "eye.slash.fill")
-                .foregroundColor(item.isAvailable ? .green : .orange)
-                .onTapGesture {
-                    hapticFeedbackLight.impactOccurred()
-                    onToggleAvailability()
-                }
-                .accessibilityLabel(item.isAvailable ? "Toggle to set item as unavailable" : "Toggle to set item as available")
-        }
-        .contentShape(Rectangle()) // Make the whole row tappable for context menu or navigation
-        .onTapGesture { // For triggering edit on tap (alternative to swipe or button)
-             onEdit()
-        }
-        .accessibilityHint("Tap to edit \(item.name) or swipe for more actions.")
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                // Trigger delete in ViewModel
-                // Task { await viewModel.deleteMenuItem(item) } // If VM is accessible here
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-            Button {
-                onEdit()
-            } label: {
-                Label("Edit", systemImage: "pencil")
-            }
-            .tint(.blue)
-        }
-        .swipeActions(edge: .leading) {
-            Button {
-                onToggleAvailability()
-            } label: {
-                Label(item.isAvailable ? "Hide" : "Show", systemImage: item.isAvailable ? "eye.slash.fill" : "eye.fill")
-            }
-            .tint(item.isAvailable ? .orange : .green)
-        }
-    }
-}
 
 // Placeholder for MenuItemEditView - We'll detail this next
 struct MenuItemEditView: View {

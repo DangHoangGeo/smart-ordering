@@ -42,38 +42,118 @@ extension TableStatus {
 
 
 struct TableTileView: View {
-    let table: Table // Assuming Table struct is defined globally
-
-    var body: some View {
-        VStack(spacing: 0) { // Reduced spacing to manage elements better
-            // Status text at the top
-            Text(table.status.displayName.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(table.status.color.opacity(0.25))
-                .foregroundColor(table.status.color)
-                .cornerRadius(4)
-                .padding(.top, 8)
-
-            Spacer()
-
-            Text(table.code)
-                .font(.system(size: 28, weight: .heavy, design: .rounded))
-                .foregroundColor(table.status.color)
-                .minimumScaleFactor(0.7) // Allow shrinking if code is long
-                .lineLimit(1)
-
-            Text("Capacity: \(table.capacity)")
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundColor(table.status.color.opacity(0.8))
-
-            Spacer()
+    let table: Table
+    let isSelected: Bool
+    let onTap: () -> Void
+    @State private var hapticFeedback = UIImpactFeedbackGenerator(style: .medium)
+    
+    private var statusIcon: String {
+        switch table.status {
+        case TableStatus.available:
+            return "checkmark.circle.fill"
+        case TableStatus.occupied:
+            return "person.2.fill"
+        case TableStatus.reserved:
+            return "calendar.badge.clock"
+        case TableStatus.needsCleaning:
+            return "sparkles"
+        case TableStatus.outOfService:
+            return "xmark.circle.fill"
         }
-        .frame(width: 150, height: 110) // Standardized height
-        .background(table.status.backgroundColor)
-        .cornerRadius(12)
-        .shadow(color: table.status.color.opacity(0.3), radius: 4, x: 0, y: 2)
+    }
+    
+    private var statusText: String {
+        switch table.status {
+        case TableStatus.available:
+            return "Available"
+        case TableStatus.occupied:
+            return "Occupied"
+        case TableStatus.reserved:
+            return "Reserved"
+        case TableStatus.needsCleaning:
+            return "Needs Cleaning"
+        case TableStatus.outOfService:
+            return "Out of Service"
+        }
+    }
+    
+    var body: some View {
+        Button(action: {
+            hapticFeedback.impactOccurred()
+            onTap()
+        }) {
+            VStack(spacing: 12) {
+                // Status Icon
+                ZStack {
+                    Circle()
+                        .fill(AppConfig.Colors.tableStatusColor(table.status.rawValue, opacity: 0.2))
+                        .frame(width: 52, height: 52)
+                    
+                    Image(systemName: statusIcon)
+                        .font(.system(size: 24))
+                        .foregroundColor(AppConfig.Colors.tableStatusColor(table.status.rawValue))
+                }
+                
+                VStack(spacing: 4) {
+                    Text(table.code)
+                        .font(.headline)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                        .foregroundColor(AppConfig.Colors.text)
+                    
+                    Text("\(table.capacity) guests")
+                        .font(.subheadline)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                        .foregroundColor(AppConfig.Colors.secondaryText)
+                    
+                    Text(statusText)
+                        .font(.caption)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                        .foregroundColor(AppConfig.Colors.tableStatusColor(table.status.rawValue))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppConfig.Colors.background)
+                    .shadow(
+                        color: isSelected ? 
+                            AppConfig.Colors.primary.opacity(0.3) : 
+                            AppConfig.Colors.text.opacity(0.05),
+                        radius: isSelected ? 6 : 3,
+                        y: 2
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        isSelected ? AppConfig.Colors.primary : Color.clear,
+                        lineWidth: isSelected ? 2 : 0
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(table.status == TableStatus.outOfService)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(buildAccessibilityLabel())
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityHint(table.status == TableStatus.outOfService ? 
+            "Table is out of service" : 
+            "Double tap to \(isSelected ? "deselect" : "select") table")
+    }
+    
+    private func buildAccessibilityLabel() -> String {
+        var components = [
+            "Table \(table.code)",
+            "\(table.capacity) guests",
+            statusText
+        ]
+        
+        if isSelected {
+            components.append("Selected")
+        }
+        
+        return components.joined(separator: ", ")
     }
 }
 
@@ -116,7 +196,11 @@ struct TableTileView_Previews: PreviewProvider {
         return ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150))], spacing: 16) {
                 ForEach(tables) { table in
-                    TableTileView(table: table)
+                    TableTileView(
+                        table: table,
+                        isSelected: false,
+                        onTap: { }
+                    )
                 }
             }
             .padding()

@@ -2,94 +2,140 @@ import SwiftUI
 
 struct TableSelectionSheet: View {
     @Environment(\.dismiss) var dismiss
-    @Binding var selectedTables: Set<Table>
-    // Ensure restaurantId is passed correctly or use a shared instance from Environment
     @StateObject private var tablesViewModel = TablesViewModel(restaurantId: AppConfig.shared.defaultRestaurantId)
+    @Binding var selectedTables: Set<Table>
+    @State private var searchText = ""
+    @State private var section: String?
+    @State private var hapticFeedback = UIImpactFeedbackGenerator(style: .light)
     
-    @State private var internalSelectedTables: Set<Table>
-    @State private var hapticFeedbackLight = UIImpactFeedbackGenerator(style: .light)
-    @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
-
-    init(selectedTables: Binding<Set<Table>>) {
-        self._selectedTables = selectedTables
-        self._internalSelectedTables = State(initialValue: selectedTables.wrappedValue)
-        // Consider passing restaurantId if it's dynamic
-        // For now, using default from AppConfig as an example if this sheet is used globally
+    private var sections: [String] {
+        Array(Set(tablesViewModel.tables.compactMap { $0.section })).sorted()
     }
-
+    
+    private var filteredTables: [Table] {
+        tablesViewModel.tables.filter { table in
+            let matchesSearch = searchText.isEmpty || 
+                table.code.localizedCaseInsensitiveContains(searchText)
+            let matchesSection = section == nil || table.section == section
+            return matchesSearch && matchesSection &&
+            table.status.rawValue != AppConfig.TableStatus.outOfService
+        }.sorted()
+    }
+    
     var body: some View {
         NavigationView {
-            VStack {
-                Text("Select Tables")
-                    .font(.largeTitle)
-                    .padding()
-                    .accessibilityAddTraits(.isHeader)
-
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 16)], spacing: 16) {
-                        ForEach(tablesViewModel.tables) { table in
-                            TableTileView(table: table)
-                                .onTapGesture {
-                                    if table.status == .available {
-                                        hapticFeedbackLight.impactOccurred()
-                                        if internalSelectedTables.contains(table) {
-                                            internalSelectedTables.remove(table)
-                                        } else {
-                                            internalSelectedTables.insert(table)
-                                        }
-                                    }
-                                }
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(internalSelectedTables.contains(table) ? Color.accentColor : Color.clear, lineWidth: 3)
-                                )
-                                .opacity(table.status == .available ? 1.0 : 0.5)
-                                .accessibilityElement(children: .combine) // Combine children for row-level actions
-                                .accessibilityLabel("Table \(table.code), Capacity \(table.capacity), Status \(table.status.displayName)")
-                                .accessibilityHint(table.status == .available ? (internalSelectedTables.contains(table) ? "Tap to deselect table" : "Tap to select table") : "Table is not available for selection")
-                                .accessibilityAddTraits(table.status == .available ? (internalSelectedTables.contains(table) ? .isSelected : .isButton) : .isStaticText)
+            VStack(spacing: 0) {
+                // Search and Filter Bar
+                VStack(spacing: 12) {
+                    // Search Field
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(AppConfig.Colors.secondaryText)
+                        TextField("Search tables...", text: $searchText)
+                            .font(.body)
+                            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                            .foregroundColor(AppConfig.Colors.text)
+                        if !searchText.isEmpty {
+                            Button(action: { searchText = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(AppConfig.Colors.secondaryText)
+                            }
+                            .accessibilityLabel("Clear search")
                         }
                     }
-                    .padding()
-                }
-
-                HStack {
-                    Button("Cancel") {
-                        dismiss()
+                    .padding(10)
+                    .background(AppConfig.Colors.secondaryBackground)
+                    .cornerRadius(10)
+                    
+                    // Section Pills
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            CategoryPill(
+                                name: "All",
+                                isSelected: section == nil,
+                                action: {
+                                    hapticFeedback.impactOccurred()
+                                    section = nil
+                                }
+                            )
+                            
+                            ForEach(sections, id: \.self) { sectionName in
+                                CategoryPill(
+                                    name: sectionName,
+                                    isSelected: section == sectionName,
+                                    action: {
+                                        hapticFeedback.impactOccurred()
+                                        section = sectionName
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 4)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .accessibilityLabel("Cancel table selection")
-
-                    Spacer()
-
-                    Button("Done") {
-                        hapticFeedbackMedium.impactOccurred()
-                        selectedTables = internalSelectedTables
-                        dismiss()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(internalSelectedTables.isEmpty)
-                    .accessibilityLabel("Confirm selected tables")
                 }
                 .padding()
+                .background(AppConfig.Colors.background)
+                
+                if tablesViewModel.isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if filteredTables.isEmpty {
+                    EmptyStateView(
+                        searchText: searchText,
+                        section: section,
+                        iconName: "table",
+                        message: "No tables available"
+                    )
+                } else {
+                    // Tables Grid
+                    ScrollView {
+                        LazyVGrid(
+                            columns: [
+                                GridItem(.adaptive(minimum: 150), spacing: 16)
+                            ],
+                            spacing: 16
+                        ) {
+                            ForEach(filteredTables) { table in
+                                TableTileView(
+                                    table: table,
+                                    isSelected: selectedTables.contains(where: { $0.id == table.id }),
+                                    onTap: {
+                                        hapticFeedback.impactOccurred()
+                                        toggleTableSelection(table)
+                                    }
+                                )
+                            }
+                        }
+                        .padding()
+                    }
+                }
             }
-            .navigationBarHidden(true)
-            .onAppear {
-				Task {
-                    // Ensure restaurantId is correct before fetching
-                    // tablesViewModel.restaurantId = ... // if dynamic
-					await tablesViewModel.fetchTables()
-				}
+            .navigationTitle("Select Tables")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppConfig.Colors.primary)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .font(.headline)
+                        .foregroundColor(AppConfig.Colors.primary)
+                }
             }
+        }
+        .task {
+            await tablesViewModel.fetchTables()
+        }
+    }
+    
+    private func toggleTableSelection(_ table: Table) {
+        guard let id = table.id else { return }
+        if let existing = selectedTables.first(where: { $0.id == id }) {
+            selectedTables.remove(existing)
+        } else {
+            selectedTables.insert(table)
         }
     }
 }
 
-struct TableSelectionSheet_Previews: PreviewProvider {
-    @State static var previewSelectedTables: Set<Table> = []
-    static var previews: some View {
-        TableSelectionSheet(selectedTables: $previewSelectedTables)
-    }
-}

@@ -34,13 +34,17 @@ struct TablesListView: View {
                 } else {
                     LazyVGrid(columns: columns, spacing: 16) { // Consistent spacing with columns
                         ForEach(tablesViewModel.tables.sorted(), id: \.id) { table in // Ensure Table conforms to Comparable or sort here
-                            TableTileView(table: table)
-                                .onTapGesture {
-                                    // Future: Navigate to table details or quick actions
-                                    print("Tapped on table: \(table.code)")
-                                    // Consider showing a context menu or navigating to a detail view.
-                                }
-                                .accessibilityHint("Tap to view details or actions for table \(table.code)")
+                            TableTileView(
+                                table: table,
+                                isSelected: false,
+                                onTap: { /* No-op for now */ }
+                            )
+                            .onTapGesture {
+                                // Future: Navigate to table details or quick actions
+                                print("Tapped on table: \(table.code)")
+                                // Consider showing a context menu or navigating to a detail view.
+                            }
+                            .accessibilityHint("Tap to view details or actions for table \(table.code)")
                         }
                     }
                     .padding(.horizontal) // Apply horizontal padding to the grid container

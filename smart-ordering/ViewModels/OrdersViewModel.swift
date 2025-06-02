@@ -34,7 +34,7 @@ class OrdersViewModel: ObservableObject {
     }
 
     func updateOrderItemNotes(orderId: String, itemId: String, newNotes: String?) async {
-        guard var currentOrder = findOrderLocally(orderId: orderId),
+        guard let currentOrder = findOrderLocally(orderId: orderId),
               let itemIndex = currentOrder.items.firstIndex(where: { $0.id == itemId }) else {
             errorMessage = "Order or item not found for notes update."
             return
@@ -81,8 +81,11 @@ class OrdersViewModel: ObservableObject {
                 
                 // Check for genuinely new orders to trigger notification
                 let currentOrderIds = Set(self.newOrders.compactMap { $0.id })
-                let genuinelyNewOrders = self.newOrders.filter { !oldOrderIds.contains($0.id!) }
-                
+                _ = currentOrderIds
+                let genuinelyNewOrders = self.newOrders.compactMap { order in
+                    guard let id = order.id, !oldOrderIds.contains(id) else { return nil }
+                    return order
+                }
                 if !genuinelyNewOrders.isEmpty {
                     self.triggerNewOrderNotification(genuinelyNewOrders.first)
                 }
@@ -131,22 +134,25 @@ class OrdersViewModel: ObservableObject {
 
         let newOrderNumber = await orderService.generateOrderNumber(restaurantId: self.restaurantId)
         
-        var order = Order(
+        let order = Order(
             restaurantId: self.restaurantId,
             orderNumber: newOrderNumber,
+            id: nil,
             tableIds: tableIds,
-            numberOfGuests: numberOfGuests,
+            items: [],
             status: AppConfig.OrderStatus.pending,
-            createdByStaffId: createdByStaffId
+            orderedAt: Timestamp(date: Date()),
+            numberOfGuests: numberOfGuests
         )
         
         do {
             let orderDocId = try await orderService.createOrder(order)
-            order.id = orderDocId
+            let mutableOrder = order
+            mutableOrder.id = orderDocId
             
             // Add to local list immediately for responsiveness
             if !activeOrders.contains(where: {$0.id == order.id}) {
-                 activeOrders.append(order)
+                 activeOrders.append(mutableOrder)
                  activeOrders.sort(by: { $0.orderedAt.dateValue() < $1.orderedAt.dateValue() })
             }
 
@@ -265,23 +271,18 @@ class OrdersViewModel: ObservableObject {
             try await orderService.updateOrderItemStatus(restaurantId: self.restaurantId, orderId: orderId, itemId: itemId, newStatus: newStatus)
             
             // Update local order's item for immediate UI feedback
-            var listToUpdate: UnsafeMutablePointer<[Order]>? = nil
-            var orderIndex: Int? = nil
-
             if let idx = newOrders.firstIndex(where: { $0.id == orderId }) {
-                listToUpdate = UnsafeMutablePointer(&newOrders)
-                orderIndex = idx
+                if let itemIdx = newOrders[idx].items.firstIndex(where: { $0.id == itemId }) {
+                    newOrders[idx].items[itemIdx].status = newStatus
+                    newOrders[idx].items[itemIdx].lastUpdatedAt = Timestamp(date:Date())
+                    newOrders[idx].lastUpdatedAt = Timestamp(date:Date())
+                }
             } else if let idx = activeOrders.firstIndex(where: { $0.id == orderId }) {
-                listToUpdate = UnsafeMutablePointer(&activeOrders)
-                orderIndex = idx
-            }
-
-            if let list = listToUpdate, let ordIdx = orderIndex, let itemIdx = list.pointee[ordIdx].items.firstIndex(where: { $0.id == itemId }) {
-                list.pointee[ordIdx].items[itemIdx].status = newStatus
-                list.pointee[ordIdx].items[itemIdx].lastUpdatedAt = Timestamp(date:Date())
-                list.pointee[ordIdx].lastUpdatedAt = Timestamp(date:Date())
-                // Trigger objectWillChange manually if direct array modification doesn't update UI sometimes
-                // self.objectWillChange.send()
+                if let itemIdx = activeOrders[idx].items.firstIndex(where: { $0.id == itemId }) {
+                    activeOrders[idx].items[itemIdx].status = newStatus
+                    activeOrders[idx].items[itemIdx].lastUpdatedAt = Timestamp(date:Date())
+                    activeOrders[idx].lastUpdatedAt = Timestamp(date:Date())
+                }
             }
             successMessage = "Item status updated to \(newStatus.capitalized)."
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.successMessage = nil }
@@ -292,7 +293,7 @@ class OrdersViewModel: ObservableObject {
 
     // MARK: - Item Modifications
     func addItemToOrder(orderId: String, item: OrderItem) async {
-        guard var currentOrder = findOrderLocally(orderId: orderId) else {
+        guard let currentOrder = findOrderLocally(orderId: orderId) else {
             errorMessage = "Order not found to add item."
             return
         }
@@ -324,7 +325,7 @@ class OrdersViewModel: ObservableObject {
     }
 
     func updateOrderItemQuantity(orderId: String, itemId: String, newQuantity: Int) async {
-         guard var currentOrder = findOrderLocally(orderId: orderId),
+         guard let currentOrder = findOrderLocally(orderId: orderId),
                let itemIndex = currentOrder.items.firstIndex(where: {$0.id == itemId}) else {
              errorMessage = "Order or item not found for quantity update."
              return
@@ -353,7 +354,7 @@ class OrdersViewModel: ObservableObject {
     }
 
     func removeOrderItem(orderId: String, itemId: String, softDelete: Bool = true) async {
-        guard var currentOrder = findOrderLocally(orderId: orderId),
+        guard let currentOrder = findOrderLocally(orderId: orderId),
                let itemIndex = currentOrder.items.firstIndex(where: {$0.id == itemId}) else {
              errorMessage = "Order or item not found for removal."
              return
@@ -421,7 +422,7 @@ class OrdersViewModel: ObservableObject {
             )
             
             // Update local state
-            var printedOrder = order
+            let printedOrder = order
             printedOrder.status = AppConfig.OrderStatus.printed
             printedOrder.printedAt = Timestamp(date: Date()) // Set printed time
             printedOrder.lastUpdatedAt = Timestamp(date:Date())
@@ -469,7 +470,7 @@ class OrdersViewModel: ObservableObject {
         errorMessage = nil
         successMessage = nil
 
-        var orderToFinalize = order
+        let orderToFinalize = order
         orderToFinalize.paymentMethod = paymentMethod
         orderToFinalize.amountPaid = amountPaid
         orderToFinalize.discountPercentage = discountPercentage

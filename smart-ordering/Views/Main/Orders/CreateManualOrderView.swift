@@ -19,7 +19,6 @@ struct CreateManualOrderView: View {
     // For future visual table selection
     @State private var showingTableSelectionSheet = false
     @State private var selectedTables: Set<Table> = []  // Changed to Set<Table>
-
     @State private var errorMessage: String?
     
     // Completion handler to pass back the created order

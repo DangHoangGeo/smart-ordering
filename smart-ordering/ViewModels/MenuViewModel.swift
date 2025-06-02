@@ -131,7 +131,7 @@ class MenuViewModel: ObservableObject {
         errorMessage = nil
         successMessage = nil
         do {
-            let savedItemId = try await menuService.saveMenuItem(menuItem, restaurantId: restaurantId, imageData: imageData)
+            _ = try await menuService.saveMenuItem(menuItem, restaurantId: restaurantId, imageData: imageData)
             // Refetch or update local list
             await fetchAllMenuItems() // Simplest way to refresh, or smarter update
             successMessage = menuItem.id == nil ? "Menu item added successfully." : "Menu item updated successfully."
