@@ -18,7 +18,7 @@ struct CreateManualOrderView: View {
     
     // For future visual table selection
     @State private var showingTableSelectionSheet = false
-    @State private var selectedTableObjects: [Table] = []
+    @State private var selectedTables: Set<Table> = []  // Changed to Set<Table>
 
     @State private var errorMessage: String?
     
@@ -30,9 +30,12 @@ struct CreateManualOrderView: View {
         NavigationView {
             Form {
                 Section("Order Details") {
-                    Button(action: { showingTableSelectionSheet = true }) {
+                    Button(action: {
+                        showingTableSelectionSheet = true
+                        print("Showing table selection sheet")
+                    }) {
                         HStack {
-                            Text(selectedTableObjects.isEmpty ? "Select Tables" : "Tables: \(selectedTableObjects.map(\.code).joined(separator: ", "))")
+                            Text(selectedTables.isEmpty ? "Select Tables" : "Tables: \(selectedTables.map(\.code).joined(separator: ", "))")
                             Spacer()
                             Image(systemName: "chevron.right")
                         }
@@ -51,6 +54,7 @@ struct CreateManualOrderView: View {
                                 RoundedRectangle(cornerRadius: 8)
                                     .stroke(Color(UIColor.systemGray4), lineWidth: 1)
                             )
+                            .onTapGesture {} // Empty gesture to prevent Form tap gesture
                     }
                 }
 
@@ -76,7 +80,7 @@ struct CreateManualOrderView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(ordersViewModel.isLoadingActiveOrders || selectedTableObjects.isEmpty)
+                    .disabled(ordersViewModel.isLoadingActiveOrders || selectedTables.isEmpty)
                 }
             }
             .navigationTitle("New Manual Order")
@@ -86,13 +90,7 @@ struct CreateManualOrderView: View {
                 }
             }
             .sheet(isPresented: $showingTableSelectionSheet) {
-                TableSelectionSheet(selectedTables: Binding(
-                    get: { Set(selectedTableObjects) },
-                    set: { selectedTableObjects = Array($0) }
-                ))
-            }
-            .onTapGesture { // Dismiss keyboard on tap outside
-                 hideKeyboard()
+                TableSelectionSheet(selectedTables: $selectedTables)
             }
         }
     }
@@ -101,15 +99,15 @@ struct CreateManualOrderView: View {
         hideKeyboard()
         errorMessage = nil
         
-        guard !selectedTableObjects.isEmpty else {
+        guard !selectedTables.isEmpty else {
             errorMessage = "Please select at least one table."
             return
         }
         
-        let tableIdsToUse = selectedTableObjects.compactMap { $0.id }
+        let tableIdsToUse = selectedTables.compactMap { $0.id }
         
-        let isTakeoutOrder = selectedTableObjects.contains { $0.code.localizedCaseInsensitiveCompare(AppConfig.shared.restaurantDetails.takeoutTableCode) == .orderedSame }
-        if isTakeoutOrder && selectedTableObjects.count > 1 {
+        let isTakeoutOrder = selectedTables.contains { $0.code.localizedCaseInsensitiveCompare(AppConfig.shared.restaurantDetails.takeoutTableCode) == .orderedSame }
+        if isTakeoutOrder && selectedTables.count > 1 {
             errorMessage = "Takeout order cannot be combined with other tables. Please select only '\(AppConfig.shared.restaurantDetails.takeoutTableCode)'."
             return
         }

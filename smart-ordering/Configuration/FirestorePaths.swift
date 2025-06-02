@@ -21,7 +21,7 @@ struct FirestorePaths {
 
     // Restaurants (base path, specific restaurant data is nested)
     static func restaurantBase(restaurantId: String = config.defaultRestaurantId) -> String {
-        return "\(config.firestoreCollectionPrefix)/manage/restaurants/\(restaurantId)"
+        return "\(config.firestoreCollectionPrefix)/\(restaurantId)"
     }
 
     // Orders within a specific restaurant

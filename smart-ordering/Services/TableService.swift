@@ -12,6 +12,14 @@ final class TableService {
     static let shared = TableService()
     private let db = Firestore.firestore()
     private init() {}
+    
+    private func tablesCollectionRef(restaurantId: String) -> CollectionReference {
+        db.collection(FirestorePaths.tablesCollection(restaurantId))
+    }
+    
+    private func tableDocumentRef(restaurantId: String, tableId: String) -> DocumentReference {
+        tablesCollectionRef(restaurantId: restaurantId).document(tableId)
+    }
 
     enum TableServiceError: LocalizedError {
         case firestoreError(Error)
@@ -27,14 +35,14 @@ final class TableService {
     }
 
     func fetchTables(restaurantId: String) async throws -> [Table] {
-        let snapshot = try await db.collection("restaurants").document(restaurantId).collection("tables").getDocuments()
+        let snapshot = try await tablesCollectionRef(restaurantId: restaurantId).getDocuments()
         return snapshot.documents.compactMap { doc in
             try? doc.data(as: Table.self)
         }
     }
 
     func tablesListener(restaurantId: String, onChange: @escaping (Result<[Table], TableServiceError>) -> Void) -> ListenerRegistration {
-        db.collection("restaurants").document(restaurantId).collection("tables").addSnapshotListener { snapshot, error in
+        tablesCollectionRef(restaurantId: restaurantId).addSnapshotListener { snapshot, error in
             if let error = error {
                 onChange(.failure(.firestoreError(error)))
                 return
@@ -48,7 +56,7 @@ final class TableService {
     }
 
     func updateTableStatus(restaurantId: String, tableId: String, newStatus: TableStatus, currentOrderId: String?) async throws {
-        let ref = db.collection("restaurants").document(restaurantId).collection("tables").document(tableId)
+        let ref = tableDocumentRef(restaurantId: restaurantId, tableId: tableId)
         try await ref.updateData([
             "status": newStatus.rawValue,
             "currentOrderId": currentOrderId as Any,
@@ -60,7 +68,7 @@ final class TableService {
         let batch = db.batch()
         let now = Timestamp(date: Date())
         for tableId in tableIds {
-            let ref = db.collection("restaurants").document(restaurantId).collection("tables").document(tableId)
+            let ref = tablesCollectionRef(restaurantId: restaurantId).document(tableId)
             batch.updateData([
                 "status": newStatus.rawValue,
                 "currentOrderId": currentOrderId as Any,
@@ -71,7 +79,7 @@ final class TableService {
     }
 
     func addTable(restaurantId: String, table: Table) async throws {
-        let ref = db.collection("restaurants").document(restaurantId).collection("tables").document(table.id!)
+        let ref = tablesCollectionRef(restaurantId: restaurantId).document(table.id!)
         try ref.setData(from: table)
     }
 }
