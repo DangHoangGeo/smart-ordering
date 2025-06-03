@@ -82,10 +82,7 @@ class OrdersViewModel: ObservableObject {
                 // Check for genuinely new orders to trigger notification
                 let currentOrderIds = Set(self.newOrders.compactMap { $0.id })
                 _ = currentOrderIds
-                let genuinelyNewOrders = self.newOrders.compactMap { order in
-                    guard let id = order.id, !oldOrderIds.contains(id) else { return nil }
-                    return order
-                }
+                let genuinelyNewOrders = self.newOrders.filter { $0.id != nil && !oldOrderIds.contains($0.id!) }
                 if !genuinelyNewOrders.isEmpty {
                     self.triggerNewOrderNotification(genuinelyNewOrders.first)
                 }

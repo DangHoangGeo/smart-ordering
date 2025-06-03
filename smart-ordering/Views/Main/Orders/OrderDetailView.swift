@@ -22,7 +22,7 @@ struct OrderDetailView: View {
     // For toast messages within this view
     @State private var showDetailMessageToast = false
     @State private var detailToastMessage: String = ""
-    @State private var detailToastType: OrdersListView.ToastType = .info // Reuse from OrdersListView
+    @State private var detailToastType: ToastType = .info // Use ToastView.ToastType
 
     // To access statusColor from OrderRow for the *order's* overall status display
     private let orderRowDisplayHelper: OrderRow
@@ -68,13 +68,32 @@ struct OrderDetailView: View {
                         .background(Color(UIColor.systemGroupedBackground))
 
                         // Right Column (Items & Actions)
-                        ScrollView { // Make item list scrollable independently
+                        // Use .safeAreaInset to keep action bar visible at the bottom of this column
+                        ScrollView {
                             VStack(alignment: .leading, spacing: 16) {
                                 itemsSection
                             }
                             .padding([.trailing, .leading, .top])
                         }
                         .frame(maxWidth: .infinity)
+                        .safeAreaInset(edge: .bottom, spacing: 0) { // Attach action bar to the bottom of this scroll view
+                            if isOrderEditable {
+                                VStack {
+                                    if ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders {
+                                        ProgressView()
+                                            .frame(maxWidth: .infinity)
+                                            .background(Color(.systemBackground))
+                                    } else {
+                                        actionBarButtons
+                                    }
+                                }
+                                .padding()
+                                .background(
+                                    Color(.systemBackground)
+                                        .shadow(color: .black.opacity(0.1), radius: 5, y: -2)
+                                )
+                            }
+                        }
                     }
                 } else { // Single column for smaller screens or portrait
                     ScrollView {
@@ -86,25 +105,25 @@ struct OrderDetailView: View {
                         }
                         .padding()
                     }
-                }
-                
-                if isOrderEditable {
-                    VStack {
-                        Spacer()
-                        if ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .background(Color(.systemBackground))
-                        } else {
-                            actionBarButtons
+                    // For portrait, keep action bar at the bottom of the entire view
+                    if isOrderEditable {
+                        VStack {
+                            Spacer()
+                            if ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                                    .background(Color(.systemBackground))
+                            } else {
+                                actionBarButtons
+                            }
                         }
+                        .padding()
+                        .background(
+                            Color(.systemBackground)
+                                .shadow(color: .black.opacity(0.1), radius: 5, y: -2)
+                        )
+                        .ignoresSafeArea(edges: .bottom)
                     }
-                    .padding()
-                    .background(
-                        Color(.systemBackground)
-                            .shadow(color: .black.opacity(0.1), radius: 5, y: -2)
-                    )
-                    .ignoresSafeArea(edges: .bottom)
                 }
             }
         }
