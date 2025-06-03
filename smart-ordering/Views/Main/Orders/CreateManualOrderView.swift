@@ -34,12 +34,30 @@ struct CreateManualOrderView: View {
                         print("Showing table selection sheet")
                     }) {
                         HStack {
-                            Text(selectedTables.isEmpty ? "Select Tables" : "Tables: \(selectedTables.map(\.code).joined(separator: ", "))")
+                            Text("Select Tables") // Always show "Select Tables"
                             Spacer()
                             Image(systemName: "chevron.right")
                         }
                     }
                     .foregroundColor(.primary)
+
+                    // Display selected tables summary
+                    if !selectedTables.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack {
+                                ForEach(Array(selectedTables.sorted(by: { $0.code < $1.code })), id: \.id) { table in
+                                    Text(table.code)
+                                        .font(.caption)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(AppConfig.Colors.primary.opacity(0.1))
+                                        .foregroundColor(AppConfig.Colors.primary)
+                                        .cornerRadius(8)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
 
                     Stepper("Guests: \(numberOfGuests)", value: $numberOfGuests, in: 1...50) // Increased max guests
                     
@@ -47,13 +65,21 @@ struct CreateManualOrderView: View {
                         Text("Order Notes (optional):")
                             .font(.caption)
                             .foregroundColor(.gray)
-                        TextEditor(text: $orderNotes)
-                            .frame(height: 80)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color(UIColor.systemGray4), lineWidth: 1)
-                            )
-                            .onTapGesture {} // Empty gesture to prevent Form tap gesture
+                        ZStack(alignment: .topLeading) { // Use ZStack for placeholder
+                            if orderNotes.isEmpty {
+                                Text("Customer requests, allergies, etc.")
+                                    .foregroundColor(Color(UIColor.placeholderText))
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 8)
+                            }
+                            TextEditor(text: $orderNotes)
+                                .frame(height: 80)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color(UIColor.systemGray4), lineWidth: 1)
+                                )
+                                .onTapGesture {} // Empty gesture to prevent Form tap gesture
+                        }
                     }
                 }
 
@@ -61,7 +87,8 @@ struct CreateManualOrderView: View {
                     Section {
                         Text(error)
                             .foregroundColor(.red)
-                            .font(.caption)
+                            .font(.subheadline.bold()) // Increased font size and made bold
+                            .padding(.vertical, 5) // Added vertical padding
                             .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }

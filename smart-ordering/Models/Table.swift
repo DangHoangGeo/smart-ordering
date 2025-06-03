@@ -8,7 +8,7 @@
 import FirebaseFirestore
 
 struct Table: Identifiable, Codable, Hashable, Comparable {
-    @DocumentID var id: String? // Firestore document ID (e.g., "T01", "T02", "TakeoutArea")
+    @DocumentID var id: String?
     var restaurantId: String
 
     var code: String // User-facing table identifier (e.g., "T01", "1A", "Patio 3")

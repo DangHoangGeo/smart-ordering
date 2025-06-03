@@ -19,6 +19,7 @@ struct OrderRow: View {
             OrderStatusSection(order: order)
         }
         .padding()
+        .contentShape(Rectangle()) // Increase tap target size for the entire row
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(AppConfig.Colors.background)
@@ -189,13 +190,37 @@ struct StatusBadge: View {
         let backgroundColor = AppConfig.Colors.statusColor(status, opacity: 0.2)
         let textColor = AppConfig.Colors.statusColor(status)
         
-        Text(status.replacingOccurrences(of: "_", with: " ").capitalized)
-            .font(.caption.bold())
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(backgroundColor)
-            .foregroundColor(textColor)
-            .cornerRadius(8)
+        HStack(spacing: 4) { // Use HStack to place icon and text
+            Image(systemName: statusIconName(for: status))
+                .font(.caption)
+                .foregroundColor(textColor)
+            Text(status.replacingOccurrences(of: "_", with: " ").capitalized)
+                .font(.caption.bold())
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(backgroundColor)
+        .foregroundColor(textColor)
+        .cornerRadius(8)
+    }
+    
+    private func statusIconName(for status: String) -> String {
+        switch status {
+        case AppConfig.OrderStatus.pending:
+            return "hourglass"
+        case AppConfig.OrderStatus.preparing:
+            return "flame.fill" // or "chef.hat.fill"
+        case AppConfig.OrderStatus.printed:
+            return "printer.fill"
+        case AppConfig.OrderStatus.readyForDelivery:
+            return "bell.fill"
+        case AppConfig.OrderStatus.delivered:
+            return "checkmark.circle.fill"
+        case AppConfig.OrderStatus.cancelled:
+            return "xmark.circle.fill"
+        default:
+            return "questionmark.circle.fill" // Default icon for unknown status
+        }
     }
 }
 
@@ -212,4 +237,3 @@ struct PendingItemsBadge: View {
             .cornerRadius(6)
     }
 }
-

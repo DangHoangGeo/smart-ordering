@@ -13,8 +13,7 @@ struct OrdersListView: View {
     // Toast message states
     @State private var showMessageToast = false
     @State private var toastMessage: String = ""
-    @State private var toastType: ToastType = .info // Renamed from OrdersListView.ToastType for clarity
-    enum ToastType { case info, success, error }
+    @State private var toastType: ToastType = .info // Use ToastView.ToastType
 
     // Haptic feedback generator
     @State private var hapticFeedbackMedium = UIImpactFeedbackGenerator(style: .medium)
@@ -25,6 +24,9 @@ struct OrdersListView: View {
             activeOrdersSection
         }
         .listStyle(InsetGroupedListStyle())
+        .refreshable { // Added pull-to-refresh
+            await ordersViewModel.refreshAllData()
+        }
         // .navigationTitle("Restaurant Orders") // Title is now set by MainTabView's NavigationView
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
@@ -82,10 +84,8 @@ struct OrdersListView: View {
             }
         }
         .overlay(
-            toastView
+            ToastView(message: toastMessage, type: toastType, isShowing: $showMessageToast)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .padding(.bottom, 20)
-                .padding(.horizontal)
         )
         .onReceive(ordersViewModel.$errorMessage) { message in
             if let msg = message, !msg.isEmpty {
@@ -115,6 +115,8 @@ struct OrdersListView: View {
 
     private var newOrdersSection: some View {
         Section(header: HStack {
+            Image(systemName: "globe.americas.fill") // Icon for Web Orders
+                .foregroundColor(AppConfig.Colors.primary)
             Text("New Web Orders")
             BadgeView(count: ordersViewModel.newOrders.count)
         }
@@ -135,10 +137,16 @@ struct OrdersListView: View {
                 }
             }
         }
+        .listRowBackground(AppConfig.Colors.secondaryBackground.opacity(0.5)) // Subtle background tint
     }
 
     private var activeOrdersSection: some View {
-        Section(header: Text("Active Orders (\(ordersViewModel.activeOrders.count))").font(.headline)) {
+        Section(header: HStack { // Changed to HStack to accommodate icon
+            Image(systemName: "flame.fill") // Icon for Active Orders
+                .foregroundColor(AppConfig.Colors.warning) // Using warning color for flame
+            Text("Active Orders (\(ordersViewModel.activeOrders.count))")
+        }
+        .font(.headline)) {
             if ordersViewModel.isLoadingActiveOrders && ordersViewModel.activeOrders.isEmpty {
                 ProgressView("Loading active orders...").centeredInList()
             } else if ordersViewModel.activeOrders.isEmpty {
@@ -154,52 +162,6 @@ struct OrdersListView: View {
                     }
                 }
             }
-        }
-    }
-    
-    @ViewBuilder
-    private var toastView: some View {
-        if showMessageToast {
-            Text(toastMessage)
-                .padding()
-                .background(toastType == .error ? Color.red.opacity(0.9) : (toastType == .success ? Color.green.opacity(0.9) : Color.blue.opacity(0.9)))
-                .foregroundColor(.white)
-                .cornerRadius(10)
-                .shadow(radius: 5)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { // Auto-dismiss
-                        withAnimation {
-                            self.showMessageToast = false
-                        }
-                    }
-                }
-        } else {
-            EmptyView()
-        }
-    }
-}
-
-// MARK: - BadgeView
-// (Can be in its own file, but included here for the subtask)
-
-struct BadgeView: View {
-    let count: Int
-    var backgroundColor: Color = .red
-    var textColor: Color = .white
-
-    var body: some View {
-        if count > 0 {
-            Text("\(count)")
-                .font(.caption.bold())
-                .accessibilityLabel("\(count) new items") // Example label
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(backgroundColor)
-                .foregroundColor(textColor)
-                .clipShape(Capsule())
-        } else {
-            EmptyView() // Don't show the badge if count is 0
         }
     }
 }

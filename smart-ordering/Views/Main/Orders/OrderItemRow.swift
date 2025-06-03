@@ -7,7 +7,18 @@
 
 import SwiftUI
 
-struct OrderItemRow: View {
+// Make OrderItemRow conform to Equatable to optimize re-renders
+struct OrderItemRow: View, Equatable {
+    static func == (lhs: OrderItemRow, rhs: OrderItemRow) -> Bool {
+        // Only trigger re-render if these properties change
+        lhs.item.id == rhs.item.id &&
+        lhs.item.status == rhs.item.status &&
+        lhs.item.quantity == rhs.item.quantity &&
+        lhs.item.notes == rhs.item.notes &&
+        lhs.isOrderEditable == rhs.isOrderEditable &&
+        lhs.menuItemImageUrl == rhs.menuItemImageUrl
+    }
+
     @Binding var item: OrderItem
     let isOrderEditable: Bool
     let ordersViewModel: OrdersViewModel
@@ -20,6 +31,7 @@ struct OrderItemRow: View {
     @State private var showCancelConfirm = false
     @State private var showRemoveConfirm = false
     @State private var hapticFeedback = UIImpactFeedbackGenerator(style: .medium)
+    @State private var highlightBackground: Bool = false // New state for visual feedback
 
     private let imageSize: CGFloat = 60
     
@@ -75,11 +87,12 @@ struct OrderItemRow: View {
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
                             Text("\(item.quantity)×")
-                                .font(.system(.headline, design: .rounded))
+                                .font(.title3.bold()) // Increased font size and made bold
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(Color(.systemGray6))
                                 .clipShape(Capsule())
+                                .contentShape(Rectangle()) // Make the entire padded area tappable
                                 .onTapGesture {
                                     if isOrderEditable {
                                         hapticFeedback.impactOccurred()
@@ -133,6 +146,15 @@ struct OrderItemRow: View {
                                     hapticFeedback.impactOccurred(intensity: 0.5)
                                     Task {
                                         await ordersViewModel.updateOrderItemStatus(order: order, itemId: item.id, newStatus: newStatus)
+                                        // Add visual feedback after successful update
+                                        withAnimation(.easeInOut(duration: 0.1)) {
+                                            highlightBackground = true
+                                        }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                highlightBackground = false
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -153,7 +175,7 @@ struct OrderItemRow: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemBackground))
+                    .fill(highlightBackground ? Color.accentColor.opacity(0.2) : Color(.systemBackground)) // Conditional background
                     .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
             )
         }
@@ -225,4 +247,3 @@ struct OrderItemRow: View {
         }
     }
 }
-

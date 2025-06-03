@@ -8,6 +8,8 @@ struct OrderDetailView: View {
     @State var order: Order // Passed as @State for local modifications if needed
 
     @StateObject private var menuViewModel = MenuViewModel()
+    @StateObject private var tablesViewModel = TablesViewModel(restaurantId: AppConfig.shared.defaultRestaurantId)
+    @EnvironmentObject var userViewModel: UserViewModel
     @State private var showingAddItemSheet = false
     @State private var showingPaymentSheet = false
     @State private var itemToEditQuantity: OrderItem? = nil
@@ -22,7 +24,7 @@ struct OrderDetailView: View {
     // For toast messages within this view
     @State private var showDetailMessageToast = false
     @State private var detailToastMessage: String = ""
-    @State private var detailToastType: OrdersListView.ToastType = .info // Reuse from OrdersListView
+    @State private var detailToastType: ToastType = .info // Use ToastView.ToastType
 
     // To access statusColor from OrderRow for the *order's* overall status display
     private let orderRowDisplayHelper: OrderRow
@@ -50,6 +52,21 @@ struct OrderDetailView: View {
         }
     }
 
+    private var displayableTableInfo: String {
+        let tables = tablesViewModel.tables.filter { table in
+            order.tableIds.contains(table.id ?? "")
+        }
+        if tables.isEmpty {
+            return order.tableDisplayString // Fallback to IDs if tables not loaded
+        }
+        return tables.map { table in
+            if let section = table.section {
+                return "\(table.code) (\(section))"
+            }
+            return table.code
+        }.joined(separator: ", ")
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -68,43 +85,95 @@ struct OrderDetailView: View {
                         .background(Color(UIColor.systemGroupedBackground))
 
                         // Right Column (Items & Actions)
-                        ScrollView { // Make item list scrollable independently
+                        // Use .safeAreaInset to keep action bar visible at the bottom of this column
+                        ScrollView {
                             VStack(alignment: .leading, spacing: 16) {
                                 itemsSection
                             }
                             .padding([.trailing, .leading, .top])
                         }
                         .frame(maxWidth: .infinity)
+                        .safeAreaInset(edge: .bottom, spacing: 0) { // Attach action bar to the bottom of this scroll view
+                            if isOrderEditable {
+                                VStack {
+                                    if ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders {
+                                        ProgressView()
+                                            .frame(maxWidth: .infinity)
+                                            .background(Color(.systemBackground))
+                                    } else {
+                                        actionBarButtons
+                                    }
+                                }
+                                .padding()
+                                .background(
+                                    Color(.systemBackground)
+                                        .shadow(color: .black.opacity(0.1), radius: 5, y: -2)
+                                )
+                            }
+                        }
                     }
                 } else { // Single column for smaller screens or portrait
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            headerSection
-                            summarySection
-                            itemsSection
-                            Spacer(minLength: 100)
+                    VStack(spacing: 0) {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 16) {
+                                headerSection
+                                summarySection
+                                itemsSection
+                                Spacer(minLength: 80) // Space for action bar
+                            }
+                            .padding()
                         }
-                        .padding()
-                    }
-                }
-                
-                if isOrderEditable {
-                    VStack {
-                        Spacer()
-                        if ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
+                        
+                        if isOrderEditable {
+                            VStack(spacing: 0) {
+                                Divider()
+                                HStack(spacing: 8) {
+                                    if ordersViewModel.isPrinting || ordersViewModel.isLoadingActiveOrders {
+                                        ProgressView()
+                                    } else {
+                                        Group {
+                                            Button {
+                                                Task { await ordersViewModel.printOrderToKitchen(order: order) }
+                                            } label: { 
+                                                HStack {
+                                                    if ordersViewModel.isPrinting {
+                                                        ProgressView()
+                                                            .scaleEffect(0.8)
+                                                    }
+                                                    Image(systemName: "printer.fill")
+                                                }
+                                            }
+                                            .disabled(order.status == AppConfig.OrderStatus.printed || 
+                                                    order.items.filter { $0.status != AppConfig.OrderStatus.cancelled && 
+                                                                       $0.status != AppConfig.OrderStatus.removed }.isEmpty)
+                                            
+                                            Button(action: { showingAddItemSheet = true }) {
+                                                Image(systemName: "plus.circle.fill")
+                                            }
+                                            
+                                            if isOrderPayable {
+                                                Button(action: { showingPaymentSheet = true }) {
+                                                    Image(systemName: "creditcard.fill")
+                                                }
+                                            }
+                                            
+                                            Button(role: .destructive) {
+                                                showingCancelConfirmation = true
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                            }
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .controlSize(.large)
+                                        .frame(maxWidth: .infinity)
+                                    }
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 8)
                                 .background(Color(.systemBackground))
-                        } else {
-                            actionBarButtons
+                            }
                         }
                     }
-                    .padding()
-                    .background(
-                        Color(.systemBackground)
-                            .shadow(color: .black.opacity(0.1), radius: 5, y: -2)
-                    )
-                    .ignoresSafeArea(edges: .bottom)
                 }
             }
         }
@@ -143,17 +212,29 @@ struct OrderDetailView: View {
                 DispatchQueue.main.async { ordersViewModel.successMessage = nil }
             }
         }
-        /**
-        .onChange(of: ordersViewModel.activeOrders) { _, newActiveOrders in
-            if let updatedOrder = newActiveOrders.first(where: { $0.id == self.order.id }) {
+        // Enable order update listeners
+        .onReceive(ordersViewModel.$activeOrders) { orders in
+            if let updatedOrder = orders.first(where: { $0.id == order.id }) {
+                print("Updating order from activeOrders, ID: \(updatedOrder.id ?? "N/A")")
                 self.order = updatedOrder
             }
         }
-        .onChange(of: ordersViewModel.newOrders) { _, newNewOrders in
-            if let updatedOrder = newNewOrders.first(where: { $0.id == self.order.id }) {
+        .onReceive(ordersViewModel.$newOrders) { orders in
+            if let updatedOrder = orders.first(where: { $0.id == order.id }) {
+                print("Updating order from newOrders, ID: \(updatedOrder.id ?? "N/A")")
                 self.order = updatedOrder
             }
-        }*/
+        }
+        // Handle order state transitions
+        .task {
+            // Try to find the order in either array if it's not already loaded
+            if order.id == nil {
+                if let foundOrder = ordersViewModel.activeOrders.first(where: { $0.orderNumber == order.orderNumber }) 
+                   ?? ordersViewModel.newOrders.first(where: { $0.orderNumber == order.orderNumber }) {
+                    self.order = foundOrder
+                }
+            }
+        }
         .alert("Cancel Order", isPresented: $showingCancelConfirmation) {
             Button("Yes, Cancel", role: .destructive) {
                 hapticFeedbackMedium.impactOccurred()
@@ -173,6 +254,8 @@ struct OrderDetailView: View {
                 menuViewModel.restaurantId = ordersViewModel.restaurantId 
                 await menuViewModel.loadInitialData()
             }
+
+            await tablesViewModel.fetchTables()
         }
     }
 
@@ -275,7 +358,7 @@ struct OrderDetailView: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Table(s): \(order.tableDisplayString)")
+                Text("Table(s): \(displayableTableInfo)")
                     .font(.title2.weight(.semibold))
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
                 Spacer()
@@ -318,9 +401,16 @@ struct OrderDetailView: View {
                             .foregroundColor(.secondary)
                             .imageScale(.small)
                             .accessibilityHidden(true)
-                        Text("By Staff: \(staffId)")
-                            .font(.body)
-                            .foregroundColor(.secondary)
+                        // Show staff name if available, fall back to ID
+                        if let staffUser = userViewModel.appUser, staffUser.id == staffId {
+                            Text("By: \(staffUser.displayName)")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("By Staff: \(staffId)")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                        }
                     }
                     .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                 }

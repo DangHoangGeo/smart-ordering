@@ -58,7 +58,8 @@ class OrderService {
 
             let orders = documents.compactMap { document -> Order? in
                 do {
-                    return try document.data(as: Order.self)
+                    let sOrder = try document.data(as: SOrder.self)
+                    return Order(from: sOrder)
                 } catch {
                     print("Error decoding order: \(error) for document \(document.documentID)")
                     return nil
@@ -93,7 +94,8 @@ class OrderService {
 
             let orders = documents.compactMap { document -> Order? in
                 do {
-                    return try document.data(as: Order.self)
+                    let sOrder = try document.data(as: SOrder.self)
+                    return Order(from: sOrder)
                 } catch {
                     print("Error decoding order: \(error) for document \(document.documentID)")
                     return nil
@@ -103,7 +105,7 @@ class OrderService {
         }
     }
     
-    func fetchActiveOrders(restaurantId: String) async throws -> [Order] { // Ensured this exists and is public (default internal)
+    func fetchActiveOrders(restaurantId: String) async throws -> [Order] {
         let activeStatuses = [
             AppConfig.OrderStatus.pending,
             AppConfig.OrderStatus.printed,
@@ -124,7 +126,8 @@ class OrderService {
             
             return snapshot.documents.compactMap { document -> Order? in
                 do {
-                    return try document.data(as: Order.self)
+                    let sOrder = try document.data(as: SOrder.self)
+                    return Order(from: sOrder)
                 } catch {
                      print("Error decoding active order: \(error) for document \(document.documentID)")
                     return nil
@@ -135,14 +138,12 @@ class OrderService {
         }
     }
 
-    // MARK: - Order Operations
-    
     // Fetch a single order by ID
     func fetchOrder(restaurantId: String, orderId: String) async throws -> Order {
         do {
             let document = try await orderDocumentRef(restaurantId: restaurantId, orderId: orderId).getDocument()
-            if let order = try? document.data(as: Order.self) {
-                return order
+            if let sOrder = try? document.data(as: SOrder.self) {
+                return Order(from: sOrder)
             }
             throw OrderServiceError.orderNotFound
         } catch {
@@ -152,7 +153,7 @@ class OrderService {
 
     // Create a new order
     func createOrder(_ order: Order) async throws -> String {
-        let orderToSave = order
+        var orderToSave = order
         orderToSave.orderedAt = Timestamp(date: Date())
         orderToSave.lastUpdatedAt = Timestamp(date: Date())
         
@@ -171,7 +172,7 @@ class OrderService {
     
     func updateOrder(_ order: Order) async throws {
         guard let orderId = order.id else { throw OrderServiceError.orderNotFound }
-        let orderToSave = order // Make a mutable copy
+        var orderToSave = order // Make a mutable copy
         orderToSave.lastUpdatedAt = Timestamp(date: Date()) // Ensure lastUpdatedAt is current
         
         do {
@@ -197,7 +198,7 @@ class OrderService {
                 return nil
             }
             
-            guard let order = try? orderSnapshot.data(as: Order.self) else {
+            guard var order = try? orderSnapshot.data(as: Order.self) else {
                 let error = NSError(domain: "OrderService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Order not found"])
                 errorPointer?.pointee = error
                 return nil
@@ -236,7 +237,7 @@ class OrderService {
                 return nil
             }
             
-            guard let order = try? orderSnapshot.data(as: Order.self) else {
+            guard var order = try? orderSnapshot.data(as: Order.self) else {
                 let error = NSError(domain: "OrderService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Order not found"])
                 errorPointer?.pointee = error
                 return nil
@@ -278,7 +279,7 @@ class OrderService {
                 return nil
             }
             
-            guard let order = try? orderSnapshot.data(as: Order.self) else {
+            guard var order = try? orderSnapshot.data(as: Order.self) else {
                 let error = NSError(domain: "OrderService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Order not found"])
                 errorPointer?.pointee = error
                 return nil
@@ -311,7 +312,7 @@ class OrderService {
                 return nil
             }
             
-            guard let order = try? orderSnapshot.data(as: Order.self) else {
+            guard var order = try? orderSnapshot.data(as: Order.self) else {
                 let error = NSError(domain: "OrderService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Order not found"])
                 errorPointer?.pointee = error
                 return nil
