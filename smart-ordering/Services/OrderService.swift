@@ -58,7 +58,8 @@ class OrderService {
 
             let orders = documents.compactMap { document -> Order? in
                 do {
-                    return try document.data(as: Order.self)
+                    let sOrder = try document.data(as: SOrder.self)
+                    return Order(from: sOrder)
                 } catch {
                     print("Error decoding order: \(error) for document \(document.documentID)")
                     return nil
@@ -93,7 +94,8 @@ class OrderService {
 
             let orders = documents.compactMap { document -> Order? in
                 do {
-                    return try document.data(as: Order.self)
+                    let sOrder = try document.data(as: SOrder.self)
+                    return Order(from: sOrder)
                 } catch {
                     print("Error decoding order: \(error) for document \(document.documentID)")
                     return nil
@@ -103,7 +105,7 @@ class OrderService {
         }
     }
     
-    func fetchActiveOrders(restaurantId: String) async throws -> [Order] { // Ensured this exists and is public (default internal)
+    func fetchActiveOrders(restaurantId: String) async throws -> [Order] {
         let activeStatuses = [
             AppConfig.OrderStatus.pending,
             AppConfig.OrderStatus.printed,
@@ -124,7 +126,8 @@ class OrderService {
             
             return snapshot.documents.compactMap { document -> Order? in
                 do {
-                    return try document.data(as: Order.self)
+                    let sOrder = try document.data(as: SOrder.self)
+                    return Order(from: sOrder)
                 } catch {
                      print("Error decoding active order: \(error) for document \(document.documentID)")
                     return nil
@@ -135,14 +138,12 @@ class OrderService {
         }
     }
 
-    // MARK: - Order Operations
-    
     // Fetch a single order by ID
     func fetchOrder(restaurantId: String, orderId: String) async throws -> Order {
         do {
             let document = try await orderDocumentRef(restaurantId: restaurantId, orderId: orderId).getDocument()
-            if let order = try? document.data(as: Order.self) {
-                return order
+            if let sOrder = try? document.data(as: SOrder.self) {
+                return Order(from: sOrder)
             }
             throw OrderServiceError.orderNotFound
         } catch {
