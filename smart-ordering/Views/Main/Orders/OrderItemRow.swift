@@ -7,7 +7,18 @@
 
 import SwiftUI
 
-struct OrderItemRow: View {
+// Make OrderItemRow conform to Equatable to optimize re-renders
+struct OrderItemRow: View, Equatable {
+    static func == (lhs: OrderItemRow, rhs: OrderItemRow) -> Bool {
+        // Only trigger re-render if these properties change
+        lhs.item.id == rhs.item.id &&
+        lhs.item.status == rhs.item.status &&
+        lhs.item.quantity == rhs.item.quantity &&
+        lhs.item.notes == rhs.item.notes &&
+        lhs.isOrderEditable == rhs.isOrderEditable &&
+        lhs.menuItemImageUrl == rhs.menuItemImageUrl
+    }
+
     @Binding var item: OrderItem
     let isOrderEditable: Bool
     let ordersViewModel: OrdersViewModel

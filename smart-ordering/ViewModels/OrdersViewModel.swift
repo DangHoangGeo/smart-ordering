@@ -34,7 +34,7 @@ class OrdersViewModel: ObservableObject {
     }
 
     func updateOrderItemNotes(orderId: String, itemId: String, newNotes: String?) async {
-        guard let currentOrder = findOrderLocally(orderId: orderId),
+        guard var currentOrder = findOrderLocally(orderId: orderId),
               let itemIndex = currentOrder.items.firstIndex(where: { $0.id == itemId }) else {
             errorMessage = "Order or item not found for notes update."
             return
@@ -131,7 +131,7 @@ class OrdersViewModel: ObservableObject {
 
         let newOrderNumber = await orderService.generateOrderNumber(restaurantId: self.restaurantId)
         
-        let order = Order(
+        var order = Order(
             restaurantId: self.restaurantId,
             orderNumber: newOrderNumber,
             id: nil,
@@ -144,12 +144,11 @@ class OrdersViewModel: ObservableObject {
         
         do {
             let orderDocId = try await orderService.createOrder(order)
-            let mutableOrder = order
-            mutableOrder.id = orderDocId
+            order.id = orderDocId // Update the original order's ID
             
             // Add to local list immediately for responsiveness
-            if !activeOrders.contains(where: {$0.id == order.id}) {
-                 activeOrders.append(mutableOrder)
+            if !activeOrders.contains(where: {$0.id == orderDocId}) {
+                 activeOrders.append(order)
                  activeOrders.sort(by: { $0.orderedAt.dateValue() < $1.orderedAt.dateValue() })
             }
 
@@ -245,14 +244,15 @@ class OrdersViewModel: ObservableObject {
     }
     
     private func fetchNewOrdersIfNeeded() async {
-        // Call if an operation might affect the newOrders list and listener isn't enough
-        // For example, if an order status is reverted to pending.
-        // This is a simplified refresh; the listener should ideally handle most cases.
-        let tempListener = orderService.newOrdersListener(restaurantId: restaurantId) { [weak self] result in
-            if case .success(let orders) = result { self?.newOrders = orders }
-        }
-        // Remove this temporary listener after one update or timeout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { tempListener.remove() }
+        // Instead of creating a temporary listener, we can rely on the permanent listener
+        // and just wait a short time for it to sync
+        errorMessage = nil
+        
+        // Short delay to allow the permanent listener to sync
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+        
+        // The permanent listener in listenForNewOrders() will handle the updates
+        print("Allowing permanent listener to sync new orders")
     }
 
 
@@ -386,8 +386,20 @@ class OrdersViewModel: ObservableObject {
     }
 
     private func updateLocalOrder(_ order: Order) {
-        if let index = newOrders.firstIndex(where: {$0.id == order.id}) { newOrders[index] = order }
-        if let index = activeOrders.firstIndex(where: {$0.id == order.id}) { activeOrders[index] = order }
+        print("updateLocalOrder called for Order ID: \(order.id ?? "N/A")")
+        print("Order items before update:")
+        if let index = newOrders.firstIndex(where: {$0.id == order.id}) {
+            print("Found in newOrders at index \(index)")
+            print("Current items in newOrders[\(index)]: \(newOrders[index].items.map { "Item: \($0.name), Status: \($0.status), Qty: \($0.quantity)" })")
+            newOrders[index] = order
+            print("Updated items: \(order.items.map { "Item: \($0.name), Status: \($0.status), Qty: \($0.quantity)" })")
+        }
+        if let index = activeOrders.firstIndex(where: {$0.id == order.id}) {
+            print("Found in activeOrders at index \(index)")
+            print("Current items in activeOrders[\(index)]: \(activeOrders[index].items.map { "Item: \($0.name), Status: \($0.status), Qty: \($0.quantity)" })")
+            activeOrders[index] = order
+            print("Updated items: \(order.items.map { "Item: \($0.name), Status: \($0.status), Qty: \($0.quantity)" })")
+        }
         objectWillChange.send() // Ensure UI updates with nested changes
     }
 
